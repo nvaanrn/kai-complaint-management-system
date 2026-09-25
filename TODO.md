@@ -112,11 +112,14 @@
     - `Complaint`: ADMIN dapat INSERT/UPDATE/DELETE; PIC hanya UPDATE complaint miliknya (`picId = auth.uid()`); VERIFIKATOR update status verifikasi.
     - `Verification`: Hanya VERIFIKATOR/ADMIN yang bisa INSERT; bersifat immutable audit trail (tidak ada UPDATE/DELETE untuk authenticated).
     - `Document`: Hanya ADMIN bisa INSERT/UPDATE/DELETE.
-  - [x] Migrasi disimpan di [supabase/migrations/20260925225900_rls_hardening.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/supabase/migrations/20260925225900_rls_hardening.sql).
-- [x] **Otomasi CI / CD & Skrip Backup:**
-  - [x] Setup GitHub Actions workflow [.github/workflows/ci.yml](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/.github/workflows/ci.yml) untuk:
-    - TypeScript type-check (`tsc --noEmit`) pada setiap push ke `main`/`develop` dan PR ke `main`.
-    - ESLint (`npm run lint`) otomatis.
-    - Vitest unit test (`npm test`) — 36 tests harus hijau sebelum merge.
-  - [ ] Konfigurasi scheduled database dump menggunakan Supabase CLI / pg_dump.
+- [x] **Sinkronisasi User ID & Penyelesaian Bug "Tugas Saya":**
+  - [x] Sinkronisasi `User.id` dengan UUID `auth.users.id` di Supabase PostgreSQL via migrasi [20260925232000_sync_user_ids.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/supabase/migrations/20260925232000_sync_user_ids.sql).
+  - [x] Relasi foreign key `Complaint.picId` dan `Verification.verifierId` otomatis ter-cascade ke Supabase Auth UUID.
+  - [x] Trigger otomatis `on_auth_user_created` pada `auth.users` untuk sinkronisasi akun baru ke tabel `public.User`.
+  - [x] Helper `isAssignedToCurrentUser` di [src/components/DashboardClient.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/DashboardClient.tsx) mendukung pencocokan via UUID dan email untuk ketahanan filter "Tugas Saya" dan penghitungan `countMyTasks`.
+  - [x] Validasi izin eksekusi di [src/app/actions/complaints.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/actions/complaints.ts) diperkuat dan otomatis menyinkronkan `picId` ke `user.id`.
+- [x] **Konfigurasi skrip pencadangan (backup) database otomatis:**
+  - [x] Pembuatan script [scripts/backup-db.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/scripts/backup-db.ts) dan perintah `npm run db:backup` untuk mengekspor snapshot data seluruh tabel (`User`, `Complaint`, `Verification`, `Document`) secara instan.
+  - [x] Penyimpanan otomatis berkas snapshot bertimestamp ke folder `backups/` (sudah dimasukkan ke `.gitignore`).
+
 

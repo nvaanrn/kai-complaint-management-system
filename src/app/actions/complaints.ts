@@ -187,7 +187,7 @@ export async function updateComplaintProgress(
     // Validasi: PIC hanya boleh mengeksekusi keluhan yang ditugaskan kepada dirinya
     const { data: existingComplaint, error: fetchErr } = await supabase
       .from("Complaint")
-      .select("picId, status")
+      .select("picId, status, pic:picId ( id, email )")
       .eq("id", complaintId)
       .single();
 
@@ -195,7 +195,13 @@ export async function updateComplaintProgress(
       return { success: false, error: "Data keluhan tidak ditemukan." };
     }
 
-    if (existingComplaint.picId !== user.id) {
+    const assignedPic = existingComplaint.pic as { id?: string; email?: string } | null;
+    const isAuthorizedPic =
+      existingComplaint.picId === user.id ||
+      (assignedPic?.email && user.email && assignedPic.email.toLowerCase() === user.email.toLowerCase()) ||
+      (assignedPic?.id && assignedPic.id === user.id);
+
+    if (!isAuthorizedPic) {
       return {
         success: false,
         error: "Akses ditolak. Anda hanya berwenang mengeksekusi keluhan yang ditugaskan kepada Anda.",
@@ -204,6 +210,7 @@ export async function updateComplaintProgress(
 
     const updateData: any = {
       updatedAt: new Date().toISOString(),
+      picId: user.id, // Pastikan picId tersinkron dengan UUID Supabase Auth
     };
 
     const corrective = data.correctiveAction?.trim();

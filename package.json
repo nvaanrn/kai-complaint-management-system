@@ -9,6 +9,7 @@
     "lint": "next lint",
     "db:push": "prisma db push",
     "db:migrate": "ts-node scripts/run-migration.ts",
+    "db:backup": "ts-node scripts/backup-db.ts",
     "seed:auth": "ts-node scripts/seed-supabase-auth.ts",
     "test": "vitest run"
   },

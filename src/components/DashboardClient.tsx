@@ -375,6 +375,21 @@ export default function DashboardClient({
     });
   };
 
+  // Helper untuk mengecek apakah keluhan ditugaskan ke user saat ini (by ID atau by email)
+  const isAssignedToCurrentUser = (item: ComplaintData) => {
+    if (!currentUser) return false;
+    if (item.picId && item.picId === currentUser.id) return true;
+    if (item.pic?.id && item.pic.id === currentUser.id) return true;
+    if (
+      item.pic?.email &&
+      currentUser.email &&
+      item.pic.email.toLowerCase() === currentUser.email.toLowerCase()
+    ) {
+      return true;
+    }
+    return false;
+  };
+
   // Filter complaints list
   const filteredComplaints = complaints.filter((item) => {
     // Menu Verifikasi Filter
@@ -383,7 +398,7 @@ export default function DashboardClient({
     }
 
     // PIC Only Filter
-    if (picOnlyFilter && item.picId !== currentUser.id) {
+    if (picOnlyFilter && !isAssignedToCurrentUser(item)) {
       return false;
     }
 
@@ -415,7 +430,7 @@ export default function DashboardClient({
   const countDalam = complaints.filter((c) => c.status === ComplaintStatus.DALAM_PENANGANAN).length;
   const countVerif = complaints.filter((c) => c.status === ComplaintStatus.MENUNGGU_VERIFIKASI).length;
   const countSelesai = complaints.filter((c) => c.status === ComplaintStatus.TERVERIFIKASI).length;
-  const countMyTasks = complaints.filter((c) => c.picId === currentUser.id).length;
+  const countMyTasks = complaints.filter(isAssignedToCurrentUser).length;
 
   const formatDate = (val: Date | string) => {
     const d = new Date(val);
@@ -1145,7 +1160,7 @@ export default function DashboardClient({
                               onClick={() => handleOpenDetail(item)}
                               title={
                                 currentUser.role === Role.PIC
-                                  ? item.picId === currentUser.id
+                                  ? isAssignedToCurrentUser(item)
                                     ? "Eksekusi Keluhan (Tugas Anda)"
                                     : "Pantau Penanganan (Ditugaskan ke PIC Lain)"
                                   : currentUser.role === Role.ADMIN
@@ -1154,7 +1169,7 @@ export default function DashboardClient({
                               }
                               aria-label="Edit / Tindak Lanjut Keluhan"
                               className={`p-1.5 rounded-lg border transition cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
-                                currentUser.role === Role.PIC && item.picId === currentUser.id
+                                currentUser.role === Role.PIC && isAssignedToCurrentUser(item)
                                   ? "text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border-blue-200"
                                   : "text-slate-500 hover:text-amber-700 bg-slate-100/80 hover:bg-amber-50 border-slate-200/60 hover:border-amber-200"
                               }`}
@@ -1677,7 +1692,7 @@ export default function DashboardClient({
               {/* 2. TINDAKAN PENANGANAN: KHUSUS ROLE PIC */}
               {currentUser.role === Role.PIC && (
                 <div className="space-y-4 pt-3 border-t border-slate-100">
-                  {selectedComplaint.picId === currentUser.id ? (
+                  {isAssignedToCurrentUser(selectedComplaint) ? (
                     /* JIKA KELUHAN INI DITUGASKAN KEPADA PIC INI (FORM EKSEKUSI AKTIF) */
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">

@@ -51,6 +51,7 @@ export async function loginWithSupabase(formData: {
         };
         const { role: targetRole, name: targetName } = roleByEmail[email];
 
+        const adminSupabase = createAdminSupabaseClient();
         // Buat akun langsung di Supabase Auth dengan app_metadata.role (standar Supabase)
         await adminSupabase.auth.admin.createUser({
           email,
