@@ -1,0 +1,89 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  PIC
+  VERIFIKATOR
+}
+
+enum ComplaintStatus {
+  BELUM_DITANGANI
+  DALAM_PENANGANAN
+  MENUNGGU_VERIFIKASI
+  TERVERIFIKASI
+}
+
+enum VerificationResult {
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  role          Role           @default(PIC)
+  assignedTasks Complaint[]    @relation("PicComplaints")
+  verifications Verification[]
+  documents     Document[]     @relation("DocCreator")
+  createdAt     DateTime       @default(now())
+}
+
+model Complaint {
+  id               String          @id @default(cuid())
+  complaintNumber  String          @unique // Contoh: CMP-2026-001
+  date             DateTime        // Tanggal pelaporan keluhan
+  customerName     String          // Nama personil / pengguna layanan
+  source           String          // Telepon, survey, email, laporan langsung, dll.
+  description      String          @db.Text
+  status           ComplaintStatus @default(BELUM_DITANGANI)
+
+  // Penugasan PIC
+  picId            String?
+  pic              User?           @relation("PicComplaints", fields: [picId], references: [id])
+
+  // Tindakan Penanganan
+  correctiveAction String?         @db.Text // Tindakan perbaikan
+  preventiveAction String?         @db.Text // Tindakan pencegahan
+  notes            String?         @db.Text // Keterangan
+
+  // Relasi
+  verifications    Verification[]
+  documentId       String?
+  document         Document?       @relation(fields: [documentId], references: [id])
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model Verification {
+  id          String             @id @default(cuid())
+  complaintId String
+  complaint   Complaint          @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  verifierId  String
+  verifier    User               @relation(fields: [verifierId], references: [id])
+  result      VerificationResult
+  feedback    String?            @db.Text // Catatan jika ditolak / disetujui
+  verifiedAt  DateTime           @default(now())
+}
+
+model Document {
+  id             String      @id @default(cuid())
+  documentNumber String      // FR.SM/TI/033.001/10-2020
+  version        String      // 002-2020
+  documentDate   DateTime
+  createdById    String
+  createdBy      User        @relation("DocCreator", fields: [createdById], references: [id])
+  managementRep  String      // Nama Management Representative
+  complaints     Complaint[]
+  createdAt      DateTime    @default(now())
+}
