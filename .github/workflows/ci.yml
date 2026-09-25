@@ -1,0 +1,41 @@
+name: CI — Type Check, Lint & Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Type Check, Lint & Unit Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Run unit tests (Vitest)
+        run: npm test
+        env:
+          # Dummy env agar Next.js tidak error saat type-check / build
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_placeholder_key' }}
+          NEXT_SERVICE_ROLE_KEY: ${{ secrets.NEXT_SERVICE_ROLE_KEY || 'placeholder_service_role_key' }}
+          NEXTAUTH_URL: "http://localhost:3001"
+          NEXTAUTH_SECRET: "ci-placeholder-secret"

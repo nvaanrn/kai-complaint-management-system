@@ -105,9 +105,18 @@
     - [20260925132048_initial_schema.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/supabase/migrations/20260925132048_initial_schema.sql) (Baseline schema, ENUMs, tabel User, Document, Complaint, Verification, FK, index, dan default RLS).
     - [20260925140152_add_proof_image_url.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/supabase/migrations/20260925140152_add_proof_image_url.sql) (Kolom `proofImageUrl`).
     - [20260925142500_add_sla_and_contact_fields.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/supabase/migrations/20260925142500_add_sla_and_contact_fields.sql) (Kolom `customerContact`, `daopOrStation`, `submittedAt`).
-- [ ] **Pengetatan Row Level Security (RLS) di Supabase:**
-  - [ ] Buat custom Postgres function / JWT claim check agar RLS policy membatasi mutasi record berdasarkan `role` yang tertera di `auth.jwt()`.
-- [ ] **Otomasi CI / CD & Skrip Backup:**
-  - [ ] Setup GitHub Actions untuk type-checking dan build otomatis.
+- [x] **Pengetatan Row Level Security (RLS) di Supabase:**
+  - [x] Buat helper function `auth.get_role()` berbasis `auth.jwt() -> 'app_metadata' -> 'role'` (SECURITY INVOKER, tidak expose ke public).
+  - [x] Buat RLS policy granular per operasi (INSERT/UPDATE/DELETE) untuk setiap tabel berdasarkan role JWT:
+    - `User`: Hanya ADMIN bisa INSERT/UPDATE/DELETE.
+    - `Complaint`: ADMIN dapat INSERT/UPDATE/DELETE; PIC hanya UPDATE complaint miliknya (`picId = auth.uid()`); VERIFIKATOR update status verifikasi.
+    - `Verification`: Hanya VERIFIKATOR/ADMIN yang bisa INSERT; bersifat immutable audit trail (tidak ada UPDATE/DELETE untuk authenticated).
+    - `Document`: Hanya ADMIN bisa INSERT/UPDATE/DELETE.
+  - [x] Migrasi disimpan di [supabase/migrations/20260925225900_rls_hardening.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/supabase/migrations/20260925225900_rls_hardening.sql).
+- [x] **Otomasi CI / CD & Skrip Backup:**
+  - [x] Setup GitHub Actions workflow [.github/workflows/ci.yml](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/.github/workflows/ci.yml) untuk:
+    - TypeScript type-check (`tsc --noEmit`) pada setiap push ke `main`/`develop` dan PR ke `main`.
+    - ESLint (`npm run lint`) otomatis.
+    - Vitest unit test (`npm test`) — 36 tests harus hijau sebelum merge.
   - [ ] Konfigurasi scheduled database dump menggunakan Supabase CLI / pg_dump.
 
