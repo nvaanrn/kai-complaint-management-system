@@ -45,11 +45,41 @@ async function main() {
     },
   });
 
-  console.log('✅ User berhasil di-seed:');
+  console.log('✅ User berhasil di-seed di tabel database:');
   console.log(`   - Admin       : ${admin.email}`);
   console.log(`   - PIC         : ${pic.email}`);
   console.log(`   - Verifikator : ${verifikator.email}`);
   console.log('   (Password untuk semua akun: password123)\n');
+
+  // Sinkronisasi ke Supabase Auth (Standar Supabase) jika service role key tersedia
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.NEXT_SERVICE_ROLE_KEY;
+  if (supabaseUrl && serviceRoleKey) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const accounts = [
+        { email: 'admin@spkp.kai.id', name: 'Administrator SPKP', role: Role.ADMIN },
+        { email: 'pic@spkp.kai.id', name: 'Budi Santoso (PIC Operasional)', role: Role.PIC },
+        { email: 'verifikator@spkp.kai.id', name: 'Siti Rahma (Tim Verifikasi)', role: Role.VERIFIKATOR },
+      ];
+
+      for (const acc of accounts) {
+        await supabase.auth.admin.createUser({
+          email: acc.email,
+          password: 'password123',
+          email_confirm: true,
+          user_metadata: { name: acc.name, role: acc.role },
+          app_metadata: { role: acc.role },
+        }).catch(() => {
+          // Akun sudah ada di Supabase Auth
+        });
+      }
+      console.log('✅ Sinkronisasi akun ke Supabase Auth selesai.\n');
+    } catch (err) {
+      console.warn('⚠️ Gagal menyinkronkan ke Supabase Auth (opsional):', err);
+    }
+  }
 
   // 4. Buat Sample Data Keluhan (Complaints)
   const complaints = [

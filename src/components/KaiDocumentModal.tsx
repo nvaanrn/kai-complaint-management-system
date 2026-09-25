@@ -33,6 +33,7 @@ export default function KaiDocumentModal({
   const [managementRep, setManagementRep] = useState("Ir. Bambang Triyono (MR)");
   const [isPreview, setIsPreview] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const toggleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -58,6 +59,43 @@ export default function KaiDocumentModal({
     });
     setIsSaving(false);
     handlePrint();
+  };
+
+  const handleDownloadPdf = async () => {
+    if (selectedIds.length === 0) return;
+    setIsDownloading(true);
+    try {
+      await createDocumentBatch({
+        complaintIds: selectedIds,
+        documentNumber: docNumber,
+        managementRep,
+      });
+
+      const { pdf } = await import("@react-pdf/renderer");
+      const { KaiDocumentPdf } = await import("@/components/pdf/KaiDocumentPdf");
+
+      const blob = await pdf(
+        <KaiDocumentPdf
+          complaints={selectedList}
+          documentNumber={docNumber}
+          managementRep={managementRep}
+          creatorName={currentUser.name || "Administrator KAI"}
+        />
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `FR-SM-TI-033-001_${docNumber.replace(/[\/\\:]/g, "-")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Gagal mengunduh dokumen PDF:", error);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const formatDate = (val: Date | string) => {
@@ -104,14 +142,26 @@ export default function KaiDocumentModal({
                   &larr; Pilih Keluhan Lain
                 </button>
                 <button
-                  onClick={handleSaveBatch}
-                  disabled={isSaving}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                  onClick={handleDownloadPdf}
+                  disabled={isDownloading || isSaving}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Unduh berkas PDF resmi KAI secara langsung"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {isDownloading ? "Membuat PDF..." : "Unduh PDF (React-PDF)"}
+                </button>
+                <button
+                  onClick={handleSaveBatch}
+                  disabled={isSaving || isDownloading}
+                  className="px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                  title="Cetak via dialog browser"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
-                  {isSaving ? "Menyimpan..." : "Cetak / Simpan PDF"}
+                  {isSaving ? "Menyimpan..." : "Cetak Browser"}
                 </button>
               </>
             )}

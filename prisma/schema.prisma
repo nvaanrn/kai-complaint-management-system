@@ -1,7 +1,7 @@
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  // directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -43,17 +43,21 @@ model Complaint {
   complaintNumber  String          @unique // Contoh: CMP-2026-001
   date             DateTime        // Tanggal pelaporan keluhan
   customerName     String          // Nama personil / pengguna layanan
+  customerContact  String?         // Nomor kontak / WhatsApp pelapor
+  daopOrStation    String?         // Stasiun / Wilayah Daop operasional KAI
   source           String          // Telepon, survey, email, laporan langsung, dll.
   description      String          @db.Text
   status           ComplaintStatus @default(BELUM_DITANGANI)
 
-  // Penugasan PIC
+  // Penugasan PIC & Audit Waktu
   picId            String?
   pic              User?           @relation("PicComplaints", fields: [picId], references: [id])
+  submittedAt      DateTime?       // Waktu pengajuan verifikasi oleh PIC (audit SLA)
 
   // Tindakan Penanganan
   correctiveAction String?         @db.Text // Tindakan perbaikan
   preventiveAction String?         @db.Text // Tindakan pencegahan
+  proofImageUrl    String?         @db.Text // URL foto bukti perbaikan di lapangan (Supabase Storage)
   notes            String?         @db.Text // Keterangan
 
   // Relasi

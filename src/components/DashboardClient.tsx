@@ -1,7 +1,6 @@
 "use client";
-
 import React, { useState, useTransition } from "react";
-import { ComplaintStatus, Role, VerificationResult } from "@prisma/client";
+import { ComplaintStatus, Role, VerificationResult, ComplaintData, UserSummary } from "@/types/database";
 import {
   createComplaint,
   assignPIC,
@@ -14,39 +13,10 @@ import SourceComparisonChart from "@/components/SourceComparisonChart";
 import KaiDocumentModal from "@/components/KaiDocumentModal";
 import LogoutButton from "@/components/LogoutButton";
 import Image from "next/image";
+import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { exportComplaintsToExcel } from "@/lib/exportExcel";
 
-export interface UserSummary {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-}
-
-export interface ComplaintData {
-  id: string;
-  complaintNumber: string;
-  date: Date | string;
-  customerName: string;
-  source: string;
-  description: string;
-  status: ComplaintStatus;
-  correctiveAction: string | null;
-  preventiveAction: string | null;
-  notes: string | null;
-  picId: string | null;
-  pic: UserSummary | null;
-  verifications?: Array<{
-    id: string;
-    result: VerificationResult;
-    feedback: string | null;
-    verifiedAt: Date | string;
-    verifier: {
-      name: string;
-      role: Role;
-    };
-  }>;
-  createdAt: Date | string;
-}
+export type { ComplaintData, UserSummary } from "@/types/database";
 
 interface DashboardClientProps {
   complaints: ComplaintData[];
@@ -73,7 +43,7 @@ export default function DashboardClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [sourceFilter, setSourceFilter] = useState<string>("ALL");
-  const [picOnlyFilter, setPicOnlyFilter] = useState(currentUser.role === Role.PIC);
+  const [picOnlyFilter, setPicOnlyFilter] = useState(false);
   const [showAdminChart, setShowAdminChart] = useState(false);
 
   // Modal States
@@ -92,8 +62,34 @@ export default function DashboardClient({
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Kunci scroll dashboard saat modal apapun terbuka agar modal dapat di-scroll dengan sempurna
+  React.useEffect(() => {
+    const isAnyModalOpen =
+      isCreateModalOpen ||
+      isDocModalOpen ||
+      Boolean(selectedComplaint) ||
+      Boolean(selectedViewComplaint) ||
+      Boolean(complaintToDelete);
+
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [
+    isCreateModalOpen,
+    isDocModalOpen,
+    selectedComplaint,
+    selectedViewComplaint,
+    complaintToDelete,
+  ]);
+
   // Form State: Catat Keluhan Baru
   const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerContact, setNewCustomerContact] = useState("");
+  const [newDaopOrStation, setNewDaopOrStation] = useState("Daop 1 Jakarta");
   const [newSource, setNewSource] = useState("Telepon");
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [newPicId, setNewPicId] = useState("");
@@ -102,12 +98,16 @@ export default function DashboardClient({
 
   // Form State: Tindak Lanjut PIC / Admin
   const [editCustomerName, setEditCustomerName] = useState("");
+  const [editCustomerContact, setEditCustomerContact] = useState("");
+  const [editDaopOrStation, setEditDaopOrStation] = useState("");
   const [editSource, setEditSource] = useState("Telepon");
   const [editDate, setEditDate] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPicId, setEditPicId] = useState<string>("");
   const [editCorrectiveAction, setEditCorrectiveAction] = useState("");
   const [editPreventiveAction, setEditPreventiveAction] = useState("");
+  const [editProofImageUrl, setEditProofImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [editNotes, setEditNotes] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -118,10 +118,54 @@ export default function DashboardClient({
   // Mobile sidebar toggle
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Upload handler for proof image to Supabase Storage
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Ukuran foto bukti maksimal 5MB.", "error");
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const fileExt = file.name.split(".").pop();
+      const fileName = `proof_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `complaints/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("complaint-proofs")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("complaint-proofs")
+        .getPublicUrl(filePath);
+
+      setEditProofImageUrl(publicUrl);
+      showToast("Foto bukti berhasil diunggah ke Supabase!");
+    } catch (err: any) {
+      console.error("Gagal upload foto:", err);
+      showToast(err.message || "Gagal mengunggah foto ke Supabase Storage.", "error");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   // Sync selected complaint when opened
   const handleOpenDetail = (complaint: ComplaintData) => {
     setSelectedComplaint(complaint);
     setEditCustomerName(complaint.customerName || "");
+    setEditCustomerContact(complaint.customerContact || "");
+    setEditDaopOrStation(complaint.daopOrStation || "");
     setEditSource(complaint.source || "Telepon");
     setEditDate(
       complaint.date
@@ -132,6 +176,7 @@ export default function DashboardClient({
     setEditPicId(complaint.picId || "");
     setEditCorrectiveAction(complaint.correctiveAction || "");
     setEditPreventiveAction(complaint.preventiveAction || "");
+    setEditProofImageUrl(complaint.proofImageUrl || null);
     setEditNotes(complaint.notes || "");
     setVerificationFeedback("");
   };
@@ -139,19 +184,30 @@ export default function DashboardClient({
   // 1. Submit: Catat Keluhan Baru
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustomerName || !newDescription) {
-      showToast("Nama pelapor dan uraian keluhan wajib diisi.", "error");
+
+    const trimmedCustomer = newCustomerName.trim();
+    const trimmedDescription = newDescription.trim();
+
+    if (!trimmedCustomer) {
+      showToast("Nama pelapor wajib diisi.", "error");
+      return;
+    }
+
+    if (!trimmedDescription) {
+      showToast("Uraian lengkap keluhan wajib diisi sebelum menyimpan data.", "error");
       return;
     }
 
     setCreateLoading(true);
     startTransition(async () => {
       const res = await createComplaint({
-        customerName: newCustomerName,
+        customerName: trimmedCustomer,
+        customerContact: newCustomerContact.trim() || undefined,
+        daopOrStation: newDaopOrStation,
         source: newSource,
         date: newDate,
         picId: newPicId || null,
-        description: newDescription,
+        description: trimmedDescription,
       });
 
       setCreateLoading(false);
@@ -159,6 +215,8 @@ export default function DashboardClient({
         showToast(`Keluhan baru ${res.data?.complaintNumber} berhasil dicatat!`);
         setIsCreateModalOpen(false);
         setNewCustomerName("");
+        setNewCustomerContact("");
+        setNewDaopOrStation("Daop 1 Jakarta");
         setNewSource("Telepon");
         setNewPicId("");
         setNewDescription("");
@@ -182,10 +240,16 @@ export default function DashboardClient({
       return;
     }
 
-    // Validasi submit verifikasi: Wajib diisi keduanya
-    if (submitForVerification && (!corrective || !preventive)) {
-      showToast("Tindakan perbaikan dan tindakan pencegahan wajib diisi sebelum diajukan untuk verifikasi.", "error");
-      return;
+    // Validasi submit verifikasi: Wajib diisi perbaikan, pencegahan, dan foto bukti
+    if (submitForVerification) {
+      if (!corrective || !preventive) {
+        showToast("Tindakan perbaikan dan tindakan pencegahan wajib diisi sebelum diajukan untuk verifikasi.", "error");
+        return;
+      }
+      if (!editProofImageUrl) {
+        showToast("Petugas wajib mengunggah foto bukti hasil perbaikan ke Supabase sebelum mengajukan verifikasi.", "error");
+        return;
+      }
     }
 
     setActionLoading(true);
@@ -194,6 +258,7 @@ export default function DashboardClient({
         correctiveAction: corrective,
         preventiveAction: preventive,
         notes: editNotes.trim(),
+        proofImageUrl: editProofImageUrl,
         submitForVerification,
       });
 
@@ -278,10 +343,22 @@ export default function DashboardClient({
   const handleSaveComplaintDetails = async () => {
     if (!selectedComplaint) return;
 
+    if (!editCustomerName.trim()) {
+      showToast("Nama pelapor wajib diisi.", "error");
+      return;
+    }
+
+    if (!editDescription.trim()) {
+      showToast("Uraian lengkap keluhan wajib diisi sebelum menyimpan perubahan.", "error");
+      return;
+    }
+
     setActionLoading(true);
     startTransition(async () => {
       const res = await editComplaintDetails(selectedComplaint.id, {
         customerName: editCustomerName,
+        customerContact: editCustomerContact,
+        daopOrStation: editDaopOrStation,
         source: editSource,
         date: editDate,
         description: editDescription,
@@ -392,6 +469,74 @@ export default function DashboardClient({
         );
       default:
         return <span className="text-xs">{status}</span>;
+    }
+  };
+
+  // SLA Badge Component (Target Waktu Penanganan KAI: 24 Jam)
+  const renderSlaBadge = (item: ComplaintData) => {
+    const startTime = new Date(item.date).getTime();
+    const isCompleted = item.status === ComplaintStatus.TERVERIFIKASI;
+    const isSubmitted = !!item.submittedAt || item.status === ComplaintStatus.MENUNGGU_VERIFIKASI;
+
+    if (isCompleted || isSubmitted) {
+      const endTime = item.submittedAt
+        ? new Date(item.submittedAt).getTime()
+        : new Date(item.createdAt).getTime();
+      const elapsedHours = Math.max(0, Math.round((endTime - startTime) / 3600000));
+
+      if (elapsedHours <= 24) {
+        return (
+          <span
+            title={`Keluhan diajukan/diselesaikan dalam ${elapsedHours} jam sejak diterima (SLA Terpenuhi)`}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"
+          >
+            <span>✓</span> SLA OK ({elapsedHours}j)
+          </span>
+        );
+      } else {
+        const overHours = elapsedHours - 24;
+        return (
+          <span
+            title={`Penyelesaian membutuhkan ${elapsedHours} jam (Melewati batas SLA 24 jam)`}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200"
+          >
+            <span>⚠️</span> Lewat SLA (+{overHours}j)
+          </span>
+        );
+      }
+    }
+
+    // Keluhan Masih Aktif (BELUM_DITANGANI / DALAM_PENANGANAN)
+    const elapsedNowHours = (Date.now() - startTime) / 3600000;
+    const remainingHours = Math.round(24 - elapsedNowHours);
+
+    if (remainingHours <= 0) {
+      return (
+        <span
+          title={`Telah melampaui batas waktu penanganan 24 jam (+${Math.abs(remainingHours)} jam)`}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse"
+        >
+          <span>🚨</span> Overdue (+{Math.abs(remainingHours)}j)
+        </span>
+      );
+    } else if (remainingHours <= 6) {
+      return (
+        <span
+          title={`Mendekati batas waktu SLA 24 jam (Sisa ${remainingHours} jam)`}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-300"
+        >
+          <span>⏱️</span> Sisa {remainingHours}j
+        </span>
+      );
+    } else {
+      return (
+        <span
+          title={`Target SLA: 24 jam. Sisa waktu penanganan: ${remainingHours} jam`}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200"
+        >
+          <span>⏱️</span> Sisa {remainingHours}j
+        </span>
+      );
     }
   };
 
@@ -529,6 +674,19 @@ export default function DashboardClient({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <span>Dokumen Cetak KAI</span>
+            </button>
+
+            <button
+              onClick={() => {
+                exportComplaintsToExcel(filteredComplaints);
+                showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
+              }}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-emerald-800 hover:bg-emerald-50 transition cursor-pointer"
+            >
+              <svg className="w-4 h-4 shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Ekspor Rekap Excel</span>
             </button>
           </nav>
 
@@ -764,6 +922,21 @@ export default function DashboardClient({
               </div>
 
               <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+                {/* Ekspor Excel Button */}
+                <button
+                  onClick={() => {
+                    exportComplaintsToExcel(filteredComplaints);
+                    showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
+                  }}
+                  title="Unduh rekapitulasi keluhan yang sedang difilter ke format spreadsheet Excel (.xlsx)"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs active:scale-95"
+                >
+                  <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Ekspor Excel (.xlsx)</span>
+                </button>
+
                 {/* Admin Chart Toggle Button */}
                 {currentUser.role === Role.ADMIN && (
                   <button
@@ -897,9 +1070,21 @@ export default function DashboardClient({
 
                         {/* 2. Pelapor & Masalah */}
                         <td className="px-4 py-3.5">
-                          <div className="font-bold text-slate-800 text-xs truncate" title={item.customerName}>
-                            {item.customerName}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-800 text-xs truncate" title={item.customerName}>
+                              {item.customerName}
+                            </span>
+                            {item.daopOrStation && (
+                              <span className="text-[9px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 truncate max-w-[150px]">
+                                {item.daopOrStation}
+                              </span>
+                            )}
                           </div>
+                          {item.customerContact && (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              📞 {item.customerContact}
+                            </div>
+                          )}
                           <div
                             className="text-[11px] text-slate-500 truncate mt-0.5"
                             title={item.description}
@@ -926,9 +1111,12 @@ export default function DashboardClient({
                           )}
                         </td>
 
-                        {/* 4. Status */}
+                        {/* 4. Status & SLA */}
                         <td className="px-3 py-3.5">
-                          {renderStatusBadge(item.status, item.verifications)}
+                          <div className="flex flex-col items-start gap-1">
+                            {renderStatusBadge(item.status, item.verifications)}
+                            <div>{renderSlaBadge(item)}</div>
+                          </div>
                         </td>
 
                         {/* 5. Aksi: Mata (Lihat), Pensil (Edit), Sampah (Hapus - Khusus Admin) */}
@@ -955,9 +1143,21 @@ export default function DashboardClient({
                             <button
                               type="button"
                               onClick={() => handleOpenDetail(item)}
-                              title="Edit / Tindak Lanjut Keluhan"
+                              title={
+                                currentUser.role === Role.PIC
+                                  ? item.picId === currentUser.id
+                                    ? "Eksekusi Keluhan (Tugas Anda)"
+                                    : "Pantau Penanganan (Ditugaskan ke PIC Lain)"
+                                  : currentUser.role === Role.ADMIN
+                                  ? "Edit Data Keluhan & Penugasan PIC"
+                                  : "Verifikasi Mutu Keluhan"
+                              }
                               aria-label="Edit / Tindak Lanjut Keluhan"
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 bg-slate-100/80 hover:bg-amber-50 border border-slate-200/60 hover:border-amber-200 transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                              className={`p-1.5 rounded-lg border transition cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
+                                currentUser.role === Role.PIC && item.picId === currentUser.id
+                                  ? "text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border-blue-200"
+                                  : "text-slate-500 hover:text-amber-700 bg-slate-100/80 hover:bg-amber-50 border-slate-200/60 hover:border-amber-200"
+                              }`}
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -1000,9 +1200,10 @@ export default function DashboardClient({
       {/* 3. MODAL: CATAT KELUHAN BARU (KHUSUS ADMIN) */}
       {/* ======================================================== */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="max-w-lg w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-6 bg-blue-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="max-w-xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Header Tetap / Pinned Header */}
+            <div className="p-5 sm:p-6 bg-blue-900 text-white flex items-center justify-between shrink-0 shadow-xs">
               <div className="flex items-center gap-3">
                 <Image src="/kai-logo.png" alt="KAI Logo" width={80} height={28} className="h-7 w-auto bg-white p-1 rounded object-contain" unoptimized />
                 <div>
@@ -1013,108 +1214,189 @@ export default function DashboardClient({
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition text-lg"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition text-lg cursor-pointer"
               >
                 &times;
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Nama Personil / Pengguna Layanan *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Bapak Hendra (Divisi Logistik)"
-                  value={newCustomerName}
-                  onChange={(e) => setNewCustomerName(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900"
-                />
-              </div>
+            {/* Form dengan Konten Scrollable & Footer Tetap */}
+            <form onSubmit={handleCreateSubmit} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Nama Personil / Pelapor <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: Hendra (Divisi Logistik)"
+                      value={newCustomerName}
+                      onChange={(e) => setNewCustomerName(e.target.value)}
+                      className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900"
+                    />
+                  </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Sumber Keluhan
-                  </label>
-                  <select
-                    value={newSource}
-                    onChange={(e) => setNewSource(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
-                  >
-                    <option value="Telepon">Telepon</option>
-                    <option value="Email">Email</option>
-                    <option value="Laporan Langsung">Laporan Langsung</option>
-                    <option value="Nota Dinas">Nota Dinas</option>
-                    <option value="Helpdesk Internal">Helpdesk Internal</option>
-                    <option value="Survey Pelanggan">Survey Pelanggan</option>
-                  </select>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Kontak Pelapor / WhatsApp <span className="text-slate-400 font-normal">(Opsional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: 0812-3456-7890"
+                      value={newCustomerContact}
+                      onChange={(e) => setNewCustomerContact(e.target.value)}
+                      className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Wilayah Operasional / Daop
+                    </label>
+                    <select
+                      value={newDaopOrStation}
+                      onChange={(e) => setNewDaopOrStation(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
+                    >
+                      <option value="Kantor Pusat KAI Bandung">Kantor Pusat KAI Bandung</option>
+                      <option value="Daop 1 Jakarta">Daop 1 Jakarta (Gambir / Pasarsenen)</option>
+                      <option value="Daop 2 Bandung">Daop 2 Bandung</option>
+                      <option value="Daop 3 Cirebon">Daop 3 Cirebon</option>
+                      <option value="Daop 4 Semarang">Daop 4 Semarang</option>
+                      <option value="Daop 5 Purwokerto">Daop 5 Purwokerto</option>
+                      <option value="Daop 6 Yogyakarta">Daop 6 Yogyakarta (Tugu / Lempuyangan)</option>
+                      <option value="Daop 7 Madiun">Daop 7 Madiun</option>
+                      <option value="Daop 8 Surabaya">Daop 8 Surabaya (Gubeng / Pasar Turi)</option>
+                      <option value="Daop 9 Jember">Daop 9 Jember</option>
+                      <option value="Divre I Sumatera Utara">Divre I Sumatera Utara</option>
+                      <option value="Divre II Sumatera Barat">Divre II Sumatera Barat</option>
+                      <option value="Divre III Palembang">Divre III Palembang</option>
+                      <option value="Divre IV Tanjungkarang">Divre IV Tanjungkarang</option>
+                      <option value="Lainnya">Lainnya / Luar Wilayah</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Sumber Keluhan
+                    </label>
+                    <select
+                      value={newSource}
+                      onChange={(e) => setNewSource(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
+                    >
+                      <option value="Telepon">Telepon</option>
+                      <option value="Email">Email</option>
+                      <option value="Laporan Langsung">Laporan Langsung</option>
+                      <option value="Nota Dinas">Nota Dinas</option>
+                      <option value="Helpdesk Internal">Helpdesk Internal</option>
+                      <option value="Survey Pelanggan">Survey Pelanggan</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Tanggal Pelaporan
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={newDate}
+                      onChange={(e) => setNewDate(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      Tugaskan Petugas PIC (Opsional)
+                    </label>
+                    <select
+                      value={newPicId}
+                      onChange={(e) => setNewPicId(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
+                    >
+                      <option value="">-- Pilih PIC Penanggung Jawab --</option>
+                      {picList.map((pic) => (
+                        <option key={pic.id} value={pic.id}>
+                          {pic.name} ({pic.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Tanggal Pelaporan
-                  </label>
-                  <input
-                    type="date"
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Uraian Lengkap Keluhan / Masalah <span className="text-rose-500 font-bold">* (Wajib Diisi)</span>
+                    </label>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        newDescription.trim().length === 0
+                          ? "bg-rose-50 text-rose-600 border border-rose-200"
+                          : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      }`}
+                    >
+                      {newDescription.trim().length === 0
+                        ? "Wajib Diisi"
+                        : `${newDescription.trim().length} karakter`}
+                    </span>
+                  </div>
+                  <textarea
                     required
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
+                    rows={4}
+                    placeholder="Tuliskan secara lengkap rincian kendala atau keluhan pelanggan yang perlu ditindaklanjuti (wajib diisi)..."
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    className={`w-full px-3.5 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 text-slate-900 resize-none transition ${
+                      newDescription.trim() === ""
+                        ? "border-amber-300 focus:ring-amber-500 bg-amber-50/20"
+                        : "border-slate-300 focus:ring-blue-600 bg-white"
+                    }`}
                   />
+                  {newDescription.trim() === "" && (
+                    <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1 font-medium">
+                      <span>⚠️</span> Form tidak dapat disimpan jika uraian keluhan masih kosong.
+                    </p>
+                  )}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Tugaskan Petugas PIC (Opsional)
-                </label>
-                <select
-                  value={newPicId}
-                  onChange={(e) => setNewPicId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
-                >
-                  <option value="">-- Pilih PIC Penanggung Jawab --</option>
-                  {picList.map((pic) => (
-                    <option key={pic.id} value={pic.id}>
-                      {pic.name} ({pic.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Uraian Lengkap Keluhan / Masalah *
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="Rincian kendala atau keluhan yang dialami..."
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 resize-none"
-                />
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={createLoading || isPending}
-                  className="px-5 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-md disabled:opacity-50 cursor-pointer"
-                >
-                  {createLoading ? "Menyimpan Data..." : "Simpan Keluhan"}
-                </button>
+              {/* Footer Aksi Tetap / Pinned Footer */}
+              <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                <span className="text-[11px] text-slate-500 hidden sm:inline">
+                  Pastikan nama pelapor dan uraian masalah terisi lengkap.
+                </span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateModalOpen(false)}
+                    className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-200/70 rounded-xl transition cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createLoading || isPending || !newDescription.trim() || !newCustomerName.trim()}
+                    className="px-5 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-md disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
+                    title={
+                      !newDescription.trim()
+                        ? "Uraian keluhan wajib diisi untuk menyimpan"
+                        : "Simpan keluhan ke sistem"
+                    }
+                  >
+                    {createLoading ? "Menyimpan Data..." : "Simpan Keluhan"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1125,8 +1407,8 @@ export default function DashboardClient({
       {/* 4. MODAL: DETAIL & TINDAK LANJUT KELUHAN (ROLE-BASED) */}
       {/* ======================================================== */}
       {selectedComplaint && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="p-6 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div>
@@ -1226,6 +1508,49 @@ export default function DashboardClient({
 
                     <div>
                       <label className="block text-xs font-medium text-slate-700 mb-1">
+                        Kontak Pelapor / WhatsApp <span className="text-slate-400 font-normal">(Opsional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Contoh: 0812-3456-7890"
+                        value={editCustomerContact}
+                        onChange={(e) => setEditCustomerContact(e.target.value)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
+                        Wilayah Operasional / Daop
+                      </label>
+                      <select
+                        value={editDaopOrStation}
+                        onChange={(e) => setEditDaopOrStation(e.target.value)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      >
+                        <option value="">-- Pilih Wilayah / Daop --</option>
+                        <option value="Kantor Pusat KAI Bandung">Kantor Pusat KAI Bandung</option>
+                        <option value="Daop 1 Jakarta">Daop 1 Jakarta (Gambir / Pasarsenen)</option>
+                        <option value="Daop 2 Bandung">Daop 2 Bandung</option>
+                        <option value="Daop 3 Cirebon">Daop 3 Cirebon</option>
+                        <option value="Daop 4 Semarang">Daop 4 Semarang</option>
+                        <option value="Daop 5 Purwokerto">Daop 5 Purwokerto</option>
+                        <option value="Daop 6 Yogyakarta">Daop 6 Yogyakarta (Tugu / Lempuyangan)</option>
+                        <option value="Daop 7 Madiun">Daop 7 Madiun</option>
+                        <option value="Daop 8 Surabaya">Daop 8 Surabaya (Gubeng / Pasar Turi)</option>
+                        <option value="Daop 9 Jember">Daop 9 Jember</option>
+                        <option value="Divre I Sumatera Utara">Divre I Sumatera Utara</option>
+                        <option value="Divre II Sumatera Barat">Divre II Sumatera Barat</option>
+                        <option value="Divre III Palembang">Divre III Palembang</option>
+                        <option value="Divre IV Tanjungkarang">Divre IV Tanjungkarang</option>
+                        <option value="Lainnya">Lainnya / Luar Wilayah</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
                         Sumber Keluhan
                       </label>
                       <select
@@ -1305,8 +1630,20 @@ export default function DashboardClient({
                 /* READ-ONLY UNTUK PIC & VERIFIKATOR */
                 <div className="space-y-3">
                   <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed font-sans space-y-2">
-                    <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
-                      <span className="font-bold text-slate-900 text-sm">{selectedComplaint.customerName}</span>
+                    <div className="flex items-center justify-between border-b border-slate-200/80 pb-2 flex-wrap gap-2">
+                      <div>
+                        <span className="font-bold text-slate-900 text-sm">{selectedComplaint.customerName}</span>
+                        {selectedComplaint.customerContact && (
+                          <span className="text-[11px] text-slate-500 ml-2 font-mono">
+                            ({selectedComplaint.customerContact})
+                          </span>
+                        )}
+                        {selectedComplaint.daopOrStation && (
+                          <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 ml-2 font-medium">
+                            {selectedComplaint.daopOrStation}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-slate-500">{selectedComplaint.source} &bull; {formatDate(selectedComplaint.date)}</span>
                     </div>
                     <div>
@@ -1337,97 +1674,266 @@ export default function DashboardClient({
                   </div>
                 )}
 
-              {/* 2. TINDAKAN PENANGANAN: KHUSUS ROLE PIC (FORM AKTIF) */}
+              {/* 2. TINDAKAN PENANGANAN: KHUSUS ROLE PIC */}
               {currentUser.role === Role.PIC && (
                 <div className="space-y-4 pt-3 border-t border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                      Formulir Tindakan Penanganan Pelaksana (PIC)
-                    </h4>
-                    <span className="text-[10px] font-bold text-sky-800 bg-sky-100 px-2 py-0.5 rounded">
-                      Role PIC
-                    </span>
-                  </div>
+                  {selectedComplaint.picId === currentUser.id ? (
+                    /* JIKA KELUHAN INI DITUGASKAN KEPADA PIC INI (FORM EKSEKUSI AKTIF) */
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                            Formulir Eksekusi Penanganan (PIC)
+                          </h4>
+                          <p className="text-[11px] text-emerald-700 font-medium">
+                            ✓ Keluhan ini ditugaskan kepada Anda oleh Admin.
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                          Tugas Anda
+                        </span>
+                      </div>
 
-                  {/* Input Tindakan Perbaikan */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        Tindakan Perbaikan (Corrective Action) <span className="text-rose-500 font-bold">*</span>
-                      </label>
-                      <span className="text-[10px] text-slate-400">Solusi langsung mengatasi masalah</span>
+                      {/* Input Tindakan Perbaikan */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-semibold text-slate-700">
+                            Tindakan Perbaikan (Corrective Action) <span className="text-rose-500 font-bold">*</span>
+                          </label>
+                          <span className="text-[10px] text-slate-400">Solusi langsung mengatasi masalah</span>
+                        </div>
+                        <textarea
+                          required
+                          rows={3}
+                          placeholder="Uraikan tindakan teknis langsung yang dilakukan untuk menyelesaikan keluhan..."
+                          value={editCorrectiveAction}
+                          onChange={(e) => setEditCorrectiveAction(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none bg-white"
+                        />
+                      </div>
+
+                      {/* Input Tindakan Pencegahan */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-semibold text-slate-700">
+                            Tindakan Pencegahan (Preventive Action) <span className="text-rose-500 font-bold">*</span>
+                          </label>
+                          <span className="text-[10px] text-slate-400">Langkah agar tidak terulang</span>
+                        </div>
+                        <textarea
+                          required
+                          rows={3}
+                          placeholder="Uraikan tindakan pencegahan sistemik/operasional agar kendala serupa tidak terjadi lagi..."
+                          value={editPreventiveAction}
+                          onChange={(e) => setEditPreventiveAction(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none bg-white"
+                        />
+                      </div>
+
+                      {/* Unggah Foto Bukti Hasil Perbaikan (Supabase Storage) */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-slate-700">
+                            Unggah Foto Bukti Hasil Perbaikan <span className="text-rose-500 font-bold">*</span>
+                          </label>
+                          <span className="text-[10px] text-slate-400">Supabase Storage &bull; Maks 5MB</span>
+                        </div>
+
+                        {editProofImageUrl ? (
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                                <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                Foto Bukti Siap Diverifikasi
+                              </span>
+                              <div className="flex items-center gap-3">
+                                <a
+                                  href={editProofImageUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 font-medium underline flex items-center gap-1"
+                                >
+                                  <span>Lihat Foto</span>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditProofImageUrl(null)}
+                                  className="text-xs text-rose-600 hover:text-rose-800 font-medium"
+                                >
+                                  Ganti Foto
+                                </button>
+                              </div>
+                            </div>
+                            <div className="relative w-full max-h-48 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={editProofImageUrl}
+                                alt="Foto Bukti Perbaikan"
+                                className="w-full max-h-48 object-contain"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl p-4 text-center bg-slate-50/50 hover:bg-blue-50/30 transition">
+                            <input
+                              type="file"
+                              id="proof-upload-input"
+                              accept="image/png,image/jpeg,image/webp"
+                              disabled={uploadingImage}
+                              onChange={handleImageUpload}
+                              className="hidden"
+                            />
+                            <label htmlFor="proof-upload-input" className="cursor-pointer block">
+                              <svg className="w-7 h-7 mx-auto text-slate-400 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-xs font-semibold text-blue-900 block">
+                                {uploadingImage ? "Sedang Mengunggah ke Supabase..." : "Pilih / Ambil Foto Bukti Perbaikan"}
+                              </span>
+                              <span className="text-[11px] text-slate-400 block mt-0.5">
+                                Format: PNG, JPG, atau WEBP (Maksimal 5MB)
+                              </span>
+                            </label>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Keterangan Tambahan */}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Keterangan Tambahan / Catatan Kendala <span className="text-slate-400 font-normal">(Opsional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Catatan pelaksanaan atau estimasi waktu..."
+                          value={editNotes}
+                          onChange={(e) => setEditNotes(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                        />
+                      </div>
+
+                      {/* Helper Alert jika belum lengkap */}
+                      {(!editCorrectiveAction.trim() || !editPreventiveAction.trim() || !editProofImageUrl) && (
+                        <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-xs text-amber-800">
+                          <svg className="w-4 h-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <span>
+                            Tindakan perbaikan, tindakan pencegahan, dan <b>foto bukti perbaikan</b> wajib diisi sebelum diajukan ke Verifikator.
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-2">
+                        <button
+                          type="button"
+                          disabled={actionLoading || isPending || !editCorrectiveAction.trim()}
+                          onClick={() => handleUpdateProgress(false)}
+                          className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {actionLoading ? "Menyimpan..." : "Simpan Draf Tindakan"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={actionLoading || isPending || !editCorrectiveAction.trim() || !editPreventiveAction.trim() || !editProofImageUrl}
+                          onClick={() => handleUpdateProgress(true)}
+                          className="px-5 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-md cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {actionLoading ? "Memproses..." : "Submit untuk Verifikasi →"}
+                        </button>
+                      </div>
                     </div>
-                    <textarea
-                      required
-                      rows={3}
-                      placeholder="Uraikan tindakan teknis langsung yang dilakukan untuk menyelesaikan keluhan..."
-                      value={editCorrectiveAction}
-                      onChange={(e) => setEditCorrectiveAction(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none bg-white"
-                    />
-                  </div>
+                  ) : (
+                    /* JIKA KELUHAN BUKAN DITUGASKAN KEPADA PIC INI (PANTAUAN READ-ONLY) */
+                    <div className="space-y-3">
+                      <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl space-y-1">
+                        <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                          <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>Status Penugasan PIC: {selectedComplaint.pic ? selectedComplaint.pic.name : "Belum Ditugaskan"}</span>
+                        </div>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                          Anda berwenang memantau seluruh keluhan sistem. Namun, pengisian tindakan perbaikan dan unggah foto bukti hanya dapat dilakukan oleh PIC yang ditugaskan resmi oleh Admin ({selectedComplaint.pic ? selectedComplaint.pic.name : "menunggu penugasan Admin"}).
+                        </p>
+                      </div>
 
-                  {/* Input Tindakan Pencegahan */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        Tindakan Pencegahan (Preventive Action) <span className="text-rose-500 font-bold">*</span>
-                      </label>
-                      <span className="text-[10px] text-slate-400">Langkah agar tidak terulang</span>
-                    </div>
-                    <textarea
-                      required
-                      rows={3}
-                      placeholder="Uraikan tindakan pencegahan sistemik/operasional agar kendala serupa tidak terjadi lagi..."
-                      value={editPreventiveAction}
-                      onChange={(e) => setEditPreventiveAction(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none bg-white"
-                    />
-                  </div>
+                      <div className="space-y-2.5">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                            Tindakan Perbaikan (Corrective Action)
+                          </span>
+                          <p className="text-xs text-slate-800 mt-1 whitespace-pre-wrap">
+                            {selectedComplaint.correctiveAction || (
+                              <span className="text-slate-400 italic">Belum ada tindakan perbaikan yang dicatat oleh PIC bersangkutan.</span>
+                            )}
+                          </p>
+                        </div>
 
-                  {/* Keterangan */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Keterangan Tambahan / Catatan Kendala <span className="text-slate-400 font-normal">(Opsional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Catatan pelaksanaan atau estimasi waktu..."
-                      value={editNotes}
-                      onChange={(e) => setEditNotes(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
-                    />
-                  </div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                            Tindakan Pencegahan (Preventive Action)
+                          </span>
+                          <p className="text-xs text-slate-800 mt-1 whitespace-pre-wrap">
+                            {selectedComplaint.preventiveAction || (
+                              <span className="text-slate-400 italic">Belum ada tindakan pencegahan yang dicatat.</span>
+                            )}
+                          </p>
+                        </div>
 
-                  {/* Helper Alert jika belum lengkap */}
-                  {(!editCorrectiveAction.trim() || !editPreventiveAction.trim()) && (
-                    <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-xs text-amber-800">
-                      <svg className="w-4 h-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <span>Tindakan perbaikan & pencegahan wajib diisi sebelum diajukan untuk verifikasi.</span>
+                        {/* Foto Bukti Read-Only */}
+                        {selectedComplaint.proofImageUrl ? (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                                Foto Bukti Hasil Perbaikan (Supabase Storage)
+                              </span>
+                              <a
+                                href={selectedComplaint.proofImageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium underline flex items-center gap-1"
+                              >
+                                <span>Lihat Penuh</span>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            </div>
+                            <div className="relative w-full max-h-44 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={selectedComplaint.proofImageUrl}
+                                alt="Bukti Perbaikan"
+                                className="w-full max-h-44 object-contain"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-400 italic">
+                            Belum ada foto bukti hasil perbaikan yang diunggah.
+                          </div>
+                        )}
+
+                        {selectedComplaint.notes && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                              Catatan Pelaksanaan
+                            </span>
+                            <p className="text-xs text-slate-800 mt-1">
+                              {selectedComplaint.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
-
-                  <div className="flex items-center justify-between pt-2">
-                    <button
-                      type="button"
-                      disabled={actionLoading || isPending || !editCorrectiveAction.trim()}
-                      onClick={() => handleUpdateProgress(false)}
-                      className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {actionLoading ? "Menyimpan..." : "Simpan Draf Tindakan"}
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={actionLoading || isPending || !editCorrectiveAction.trim() || !editPreventiveAction.trim()}
-                      onClick={() => handleUpdateProgress(true)}
-                      className="px-5 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-md cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {actionLoading ? "Memproses..." : "Submit untuk Verifikasi →"}
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -1464,6 +1970,42 @@ export default function DashboardClient({
                           <span className="text-slate-400 italic">Belum ada tindakan pencegahan yang dicatat oleh PIC.</span>
                         )}
                       </p>
+                    </div>
+
+                    {/* Foto Bukti Hasil Perbaikan (Supabase Storage) */}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Foto Bukti Hasil Perbaikan (Supabase Storage)
+                        </span>
+                        {selectedComplaint.proofImageUrl && (
+                          <a
+                            href={selectedComplaint.proofImageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium underline flex items-center gap-1"
+                          >
+                            <span>Lihat Foto Penuh</span>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        )}
+                      </div>
+                      {selectedComplaint.proofImageUrl ? (
+                        <div className="relative w-full max-h-52 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={selectedComplaint.proofImageUrl}
+                            alt="Foto Bukti Perbaikan"
+                            className="w-full max-h-52 object-contain"
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">
+                          Belum ada foto bukti hasil perbaikan yang diunggah oleh PIC.
+                        </p>
+                      )}
                     </div>
 
                     {selectedComplaint.notes && (
@@ -1586,8 +2128,8 @@ export default function DashboardClient({
       {/* 5. MODAL: LIHAT DETAIL KELUHAN (READ-ONLY - TOMBOL MATA) */}
       {/* ======================================================== */}
       {selectedViewComplaint && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="p-6 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
@@ -1625,9 +2167,12 @@ export default function DashboardClient({
             <div className="p-6 overflow-y-auto space-y-5">
               {/* Status & Channel Banner */}
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 font-medium">Status Keluhan:</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-slate-500 font-medium">Status:</span>
                   {renderStatusBadge(selectedViewComplaint.status, selectedViewComplaint.verifications)}
+                  <span className="text-xs text-slate-300">|</span>
+                  <span className="text-xs text-slate-500 font-medium">SLA (Target 24 Jam):</span>
+                  {renderSlaBadge(selectedViewComplaint)}
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-slate-500">Saluran:</span>
@@ -1640,12 +2185,43 @@ export default function DashboardClient({
               {/* Pelapor & PIC Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Nama Pelapor / Pengguna
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Nama Pelapor / Pengguna
+                    </span>
+                    {selectedViewComplaint.daopOrStation && (
+                      <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        {selectedViewComplaint.daopOrStation}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm font-bold text-slate-900">{selectedViewComplaint.customerName}</p>
-                  <p className="text-xs text-slate-500">
-                    Tanggal: {formatDate(selectedViewComplaint.date)}
+                  
+                  {/* Kontak Pelapor */}
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-medium block">Nomor Kontak / WhatsApp:</span>
+                    {selectedViewComplaint.customerContact ? (
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="font-mono text-xs text-slate-800 font-semibold">
+                          {selectedViewComplaint.customerContact}
+                        </span>
+                        <a
+                          href={`https://wa.me/${selectedViewComplaint.customerContact.replace(/[^0-9]/g, "")}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Hubungi pelapor melalui WhatsApp"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 hover:bg-emerald-100 transition"
+                        >
+                          <span>💬 Chat WA</span>
+                        </a>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">Kontak tidak dicantumkan</span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-400 pt-1 border-t border-slate-100">
+                    Tanggal Laporan: {formatDate(selectedViewComplaint.date)}
                   </p>
                 </div>
 
@@ -1654,11 +2230,16 @@ export default function DashboardClient({
                     Petugas PIC Penanggung Jawab
                   </span>
                   {selectedViewComplaint.pic ? (
-                    <div>
+                    <div className="space-y-1">
                       <p className="text-sm font-bold text-slate-900">{selectedViewComplaint.pic.name}</p>
                       <p className="text-xs text-slate-500">
                         {selectedViewComplaint.pic.email} &bull; ({selectedViewComplaint.pic.role})
                       </p>
+                      {selectedViewComplaint.submittedAt && (
+                        <p className="text-[11px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded inline-block font-medium">
+                          Diajukan Verifikasi: {formatDate(selectedViewComplaint.submittedAt)}
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <p className="text-xs font-medium text-amber-700 italic bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 inline-block">
@@ -1705,6 +2286,42 @@ export default function DashboardClient({
                         <span className="text-slate-400 italic">Belum ada tindakan pencegahan yang dicatat.</span>
                       )}
                     </p>
+                  </div>
+
+                  {/* Foto Bukti Hasil Perbaikan (Supabase Storage) */}
+                  <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-700">
+                        Foto Bukti Hasil Perbaikan (Supabase Storage):
+                      </span>
+                      {selectedViewComplaint.proofImageUrl && (
+                        <a
+                          href={selectedViewComplaint.proofImageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium underline flex items-center gap-1"
+                        >
+                          <span>Buka Ukuran Penuh</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                    {selectedViewComplaint.proofImageUrl ? (
+                      <div className="relative w-full max-h-56 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={selectedViewComplaint.proofImageUrl}
+                          alt="Foto Bukti Hasil Perbaikan"
+                          className="w-full max-h-56 object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">
+                        Belum ada foto bukti hasil perbaikan yang diunggah.
+                      </p>
+                    )}
                   </div>
 
                   {selectedViewComplaint.notes && (
@@ -1800,8 +2417,8 @@ export default function DashboardClient({
       {/* 6. MODAL: KONFIRMASI HAPUS KELUHAN (KHUSUS ADMIN) */}
       {/* ======================================================== */}
       {complaintToDelete && currentUser.role === Role.ADMIN && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
             <div className="p-6 text-center space-y-4">
               <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-200 shadow-2xs">
                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">

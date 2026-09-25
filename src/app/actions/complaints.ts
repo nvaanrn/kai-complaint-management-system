@@ -1,58 +1,63 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { ComplaintStatus, Role, VerificationResult } from "@prisma/client";
+import { getSupabaseDb } from "@/lib/supabase/db";
+import { ComplaintStatus, Role, VerificationResult } from "@/types/database";
 import { revalidatePath } from "next/cache";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
+import { validateComplaintInput, validatePicExecutionInput, validateVerificationInput } from "@/lib/validation";
+import { formatComplaintNumber, parseNextSequence } from "@/lib/complaintNumber";
 
-// 1. Generate nomor keluhan otomatis: CMP-YYYY-XXX
+// 1. Generate nomor keluhan otomatis: CMP-YYYY-XXX via Supabase
 async function generateComplaintNumber(): Promise<string> {
   const currentYear = new Date().getFullYear();
   const prefix = `CMP-${currentYear}-`;
 
-  const lastComplaint = await prisma.complaint.findFirst({
-    where: {
-      complaintNumber: {
-        startsWith: prefix,
-      },
-    },
-    orderBy: {
-      complaintNumber: "desc",
-    },
-    select: {
-      complaintNumber: true,
-    },
-  });
+  try {
+    const supabase = await getSupabaseDb();
+    const { data: lastComplaint, error } = await supabase
+      .from("Complaint")
+      .select("complaintNumber")
+      .like("complaintNumber", `${prefix}%`)
+      .order("complaintNumber", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  let nextSequence = 1;
-  if (lastComplaint?.complaintNumber) {
-    const parts = lastComplaint.complaintNumber.split("-");
-    const lastNum = parseInt(parts[2], 10);
-    if (!isNaN(lastNum)) {
-      nextSequence = lastNum + 1;
-    }
+    const nextSequence = parseNextSequence(!error ? lastComplaint?.complaintNumber : null, currentYear);
+    return formatComplaintNumber(currentYear, nextSequence);
+  } catch (err) {
+    console.warn("Gagal cek sequence terakhir, menggunakan default urutan:", err);
+    return formatComplaintNumber(currentYear, 1);
   }
-
-  const paddedNum = String(nextSequence).padStart(3, "0");
-  return `${prefix}${paddedNum}`;
 }
 
-// 2. Server Action: Catat Keluhan Baru (Admin)
+// 2. Server Action: Tambah Keluhan Baru (Admin / Registrasi)
 export async function createComplaint(formData: {
   customerName: string;
+  customerContact?: string;
+  daopOrStation?: string;
   source: string;
   description: string;
   date?: string;
   picId?: string | null;
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const user = await getCurrentUser();
+  if (!user) {
     return { success: false, error: "Unauthorized. Silakan login terlebih dahulu." };
   }
 
-  // Sesuai SOP KAI: Hanya Admin (atau staf berwenang) yang mencatat keluhan
+  // Sesuai SOP KAI: Validasi keluhan
+  const validation = validateComplaintInput({
+    customerName: formData.customerName,
+    description: formData.description,
+    source: formData.source,
+  });
+
+  if (!validation.isValid) {
+    return { success: false, error: validation.firstError };
+  }
+
   try {
+    const supabase = await getSupabaseDb();
     const complaintNumber = await generateComplaintNumber();
     const complaintDate = formData.date ? new Date(formData.date) : new Date();
 
@@ -60,17 +65,54 @@ export async function createComplaint(formData: {
       ? ComplaintStatus.DALAM_PENANGANAN
       : ComplaintStatus.BELUM_DITANGANI;
 
-    const newComplaint = await prisma.complaint.create({
-      data: {
-        complaintNumber,
-        customerName: formData.customerName.trim(),
-        source: formData.source,
-        description: formData.description.trim(),
-        date: complaintDate,
-        status: initialStatus,
-        picId: formData.picId && formData.picId !== "" ? formData.picId : null,
-      },
-    });
+    const id = crypto.randomUUID();
+
+    const now = new Date().toISOString();
+    let insertPayload: any = {
+      id,
+      complaintNumber,
+      customerName: formData.customerName.trim(),
+      customerContact: formData.customerContact?.trim() || null,
+      daopOrStation: formData.daopOrStation?.trim() || null,
+      source: formData.source,
+      description: formData.description.trim(),
+      date: complaintDate.toISOString(),
+      status: initialStatus,
+      picId: formData.picId && formData.picId !== "" ? formData.picId : null,
+      updatedAt: now, // Wajib diisi eksplisit — Supabase PostgREST tidak selalu trigger DEFAULT
+    };
+
+    let { data: newComplaint, error } = await supabase
+      .from("Complaint")
+      .insert(insertPayload)
+      .select()
+      .single();
+
+    // Defensive fallback: jika database Supabase belum menjalankan migrasi kolom customerContact / daopOrStation
+    if (
+      error &&
+      (error.message?.includes("customerContact") ||
+        error.message?.includes("daopOrStation") ||
+        error.message?.includes("schema cache"))
+    ) {
+      console.warn("Retrying complaint insertion without newly added optional columns due to schema cache mismatch:", error.message);
+      delete insertPayload.customerContact;
+      delete insertPayload.daopOrStation;
+
+      const retryResult = await supabase
+        .from("Complaint")
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      newComplaint = retryResult.data;
+      error = retryResult.error;
+    }
+
+    if (error) {
+      console.error("Error creating complaint in Supabase:", error);
+      return { success: false, error: error.message || "Gagal mencatat keluhan baru ke Supabase." };
+    }
 
     revalidatePath("/dashboard");
     return { success: true, data: newComplaint };
@@ -82,19 +124,30 @@ export async function createComplaint(formData: {
 
 // 3. Server Action: Menugaskan PIC (Admin)
 export async function assignPIC(complaintId: string, picId: string) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== Role.ADMIN) {
+  const user = await getCurrentUser();
+  if (!user || user.role !== Role.ADMIN) {
     return { success: false, error: "Hanya Admin yang berwenang menentukan penugasan PIC." };
   }
 
   try {
-    const updated = await prisma.complaint.update({
-      where: { id: complaintId },
-      data: {
-        picId: picId || null,
-        status: picId ? ComplaintStatus.DALAM_PENANGANAN : ComplaintStatus.BELUM_DITANGANI,
-      },
-    });
+    const supabase = await getSupabaseDb();
+    const newStatus = picId && picId !== "" ? ComplaintStatus.DALAM_PENANGANAN : ComplaintStatus.BELUM_DITANGANI;
+
+    const { data: updated, error } = await supabase
+      .from("Complaint")
+      .update({
+        picId: picId && picId !== "" ? picId : null,
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+      })
+      .eq("id", complaintId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error assigning PIC in Supabase:", error);
+      return { success: false, error: error.message || "Gagal menugaskan PIC." };
+    }
 
     revalidatePath("/dashboard");
     return { success: true, data: updated };
@@ -104,23 +157,24 @@ export async function assignPIC(complaintId: string, picId: string) {
   }
 }
 
-// 4. Server Action: Tindakan Penanganan & Submit Verifikasi (Khusus PIC)
+// 4. Server Action: Tindakan Penanganan & Submit Verifikasi (Khusus PIC yang Ditugaskan)
 export async function updateComplaintProgress(
   complaintId: string,
   data: {
     correctiveAction?: string;
     preventiveAction?: string;
     notes?: string;
+    proofImageUrl?: string | null;
     submitForVerification?: boolean;
   }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const user = await getCurrentUser();
+  if (!user) {
     return { success: false, error: "Unauthorized." };
   }
 
-  // Sesuai SOP KAI: Hanya PIC yang berwenang mengisi tindakan penanganan dan mengajukan verifikasi
-  if (session.user.role !== Role.PIC) {
+  // Sesuai SOP KAI: Hanya PIC yang berwenang mengisi tindakan penanganan
+  if (user.role !== Role.PIC) {
     return {
       success: false,
       error: "Hanya petugas PIC yang berwenang melakukan tindakan penanganan dan pengajuan verifikasi.",
@@ -128,7 +182,29 @@ export async function updateComplaintProgress(
   }
 
   try {
-    const updateData: any = {};
+    const supabase = await getSupabaseDb();
+
+    // Validasi: PIC hanya boleh mengeksekusi keluhan yang ditugaskan kepada dirinya
+    const { data: existingComplaint, error: fetchErr } = await supabase
+      .from("Complaint")
+      .select("picId, status")
+      .eq("id", complaintId)
+      .single();
+
+    if (fetchErr || !existingComplaint) {
+      return { success: false, error: "Data keluhan tidak ditemukan." };
+    }
+
+    if (existingComplaint.picId !== user.id) {
+      return {
+        success: false,
+        error: "Akses ditolak. Anda hanya berwenang mengeksekusi keluhan yang ditugaskan kepada Anda.",
+      };
+    }
+
+    const updateData: any = {
+      updatedAt: new Date().toISOString(),
+    };
 
     const corrective = data.correctiveAction?.trim();
     const preventive = data.preventiveAction?.trim();
@@ -150,21 +226,52 @@ export async function updateComplaintProgress(
         };
       }
       updateData.status = ComplaintStatus.MENUNGGU_VERIFIKASI;
+      updateData.submittedAt = new Date().toISOString();
     } else {
       // Pastikan tetap DALAM_PENANGANAN
-      const current = await prisma.complaint.findUnique({
-        where: { id: complaintId },
-        select: { status: true },
-      });
-      if (current?.status === ComplaintStatus.BELUM_DITANGANI) {
+      if (existingComplaint.status === ComplaintStatus.BELUM_DITANGANI) {
         updateData.status = ComplaintStatus.DALAM_PENANGANAN;
       }
     }
 
-    const updated = await prisma.complaint.update({
-      where: { id: complaintId },
-      data: updateData,
-    });
+    if (corrective !== undefined) updateData.correctiveAction = corrective;
+    if (preventive !== undefined) updateData.preventiveAction = preventive;
+    if (data.notes !== undefined) updateData.notes = data.notes.trim();
+    if (data.proofImageUrl !== undefined) updateData.proofImageUrl = data.proofImageUrl;
+
+    let { data: updated, error } = await supabase
+      .from("Complaint")
+      .update(updateData)
+      .eq("id", complaintId)
+      .select()
+      .single();
+
+    // Defensive fallback jika kolom submittedAt atau proofImageUrl belum dibuat di database
+    if (
+      error &&
+      (error.message?.includes("submittedAt") ||
+        error.message?.includes("proofImageUrl") ||
+        error.message?.includes("schema cache"))
+    ) {
+      console.warn("Retrying PIC execution update without newly added columns due to schema cache mismatch:", error.message);
+      delete updateData.submittedAt;
+      delete updateData.proofImageUrl;
+
+      const retryResult = await supabase
+        .from("Complaint")
+        .update(updateData)
+        .eq("id", complaintId)
+        .select()
+        .single();
+
+      updated = retryResult.data;
+      error = retryResult.error;
+    }
+
+    if (error) {
+      console.error("Error updating complaint progress in Supabase:", error);
+      return { success: false, error: error.message || "Gagal memperbarui status keluhan." };
+    }
 
     revalidatePath("/dashboard");
     return { success: true, data: updated };
@@ -182,13 +289,13 @@ export async function verifyComplaint(
     feedback?: string;
   }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const user = await getCurrentUser();
+  if (!user) {
     return { success: false, error: "Unauthorized." };
   }
 
   // Sesuai aturan KAI: Verifikasi hanya oleh Verifikator (Admin tidak melakukan verifikasi)
-  if (session.user.role !== Role.VERIFIKATOR && session.user.role !== Role.ADMIN) {
+  if (user.role !== Role.VERIFIKATOR && user.role !== Role.ADMIN) {
     return { success: false, error: "Hanya Verifikator yang berwenang melakukan verifikasi mutu keluhan." };
   }
 
@@ -198,15 +305,25 @@ export async function verifyComplaint(
   }
 
   try {
+    const supabase = await getSupabaseDb();
+
     // 1. Catat ke histori verifikasi tanpa menimpa data lama
-    await prisma.verification.create({
-      data: {
+    const verificationId = crypto.randomUUID();
+    const { error: vError } = await supabase
+      .from("Verification")
+      .insert({
+        id: verificationId,
         complaintId,
-        verifierId: session.user.id,
+        verifierId: user.id,
         result: data.result,
         feedback: data.feedback?.trim() || null,
-      },
-    });
+        verifiedAt: new Date().toISOString(),
+      });
+
+    if (vError) {
+      console.error("Error creating verification in Supabase:", vError);
+      return { success: false, error: vError.message || "Gagal menyimpan riwayat verifikasi." };
+    }
 
     // 2. Tentukan status baru:
     // Approve: MENUNGGU VERIFIKASI -> TERVERIFIKASI
@@ -216,13 +333,21 @@ export async function verifyComplaint(
         ? ComplaintStatus.TERVERIFIKASI
         : ComplaintStatus.DALAM_PENANGANAN;
 
-    const updated = await prisma.complaint.update({
-      where: { id: complaintId },
-      data: {
+    // Hanya update status & updatedAt — jangan timpa field notes milik PIC
+    const { data: updated, error } = await supabase
+      .from("Complaint")
+      .update({
         status: newStatus,
-        notes: data.feedback ? `[Catatan Verifikasi]: ${data.feedback.trim()}` : undefined,
-      },
-    });
+        updatedAt: new Date().toISOString(),
+      })
+      .eq("id", complaintId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error updating complaint status in Supabase:", error);
+      return { success: false, error: error.message || "Gagal memperbarui status verifikasi keluhan." };
+    }
 
     revalidatePath("/dashboard");
     return { success: true, data: updated };
@@ -238,8 +363,8 @@ export async function createDocumentBatch(data: {
   documentNumber?: string;
   managementRep: string;
 }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  const user = await getCurrentUser();
+  if (!user) {
     return { success: false, error: "Unauthorized." };
   }
 
@@ -248,23 +373,33 @@ export async function createDocumentBatch(data: {
   }
 
   try {
+    const supabase = await getSupabaseDb();
     const docNumber = data.documentNumber || `FR.SM/TI/033.001/${new Date().getMonth() + 1}-${new Date().getFullYear()}`;
+    const docId = crypto.randomUUID();
 
-    const newDoc = await prisma.document.create({
-      data: {
+    const { data: newDoc, error: docError } = await supabase
+      .from("Document")
+      .insert({
+        id: docId,
         documentNumber: docNumber,
         version: "002-2020",
-        documentDate: new Date(),
-        createdById: session.user.id,
+        documentDate: new Date().toISOString(),
+        createdById: user.id,
         managementRep: data.managementRep || "Management Representative KAI",
-        complaints: {
-          connect: data.complaintIds.map((id) => ({ id })),
-        },
-      },
-      include: {
-        complaints: true,
-      },
-    });
+      })
+      .select()
+      .single();
+
+    if (docError) {
+      console.error("Error creating document in Supabase:", docError);
+      return { success: false, error: docError.message || "Gagal membuat dokumen rekapitulasi." };
+    }
+
+    // Sambungkan relasi complaint ke documentId
+    await supabase
+      .from("Complaint")
+      .update({ documentId: docId, updatedAt: new Date().toISOString() })
+      .in("id", data.complaintIds);
 
     revalidatePath("/dashboard");
     return { success: true, data: newDoc };
@@ -276,15 +411,28 @@ export async function createDocumentBatch(data: {
 
 // 7. Server Action: Hapus Keluhan (Khusus Admin)
 export async function deleteComplaint(complaintId: string) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== Role.ADMIN) {
+  const user = await getCurrentUser();
+  if (!user || user.role !== Role.ADMIN) {
     return { success: false, error: "Hanya Admin yang berwenang menghapus data keluhan." };
   }
 
   try {
-    const deleted = await prisma.complaint.delete({
-      where: { id: complaintId },
-    });
+    const supabase = await getSupabaseDb();
+
+    // Hapus verifikasi terkait terlebih dahulu (cascade)
+    await supabase.from("Verification").delete().eq("complaintId", complaintId);
+
+    const { data: deleted, error } = await supabase
+      .from("Complaint")
+      .delete()
+      .eq("id", complaintId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error deleting complaint in Supabase:", error);
+      return { success: false, error: error.message || "Gagal menghapus keluhan dari Supabase." };
+    }
 
     revalidatePath("/dashboard");
     return { success: true, data: deleted };
@@ -299,31 +447,68 @@ export async function editComplaintDetails(
   complaintId: string,
   data: {
     customerName?: string;
+    customerContact?: string;
+    daopOrStation?: string;
     source?: string;
     date?: string;
     description?: string;
     picId?: string | null;
   }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user || session.user.role !== Role.ADMIN) {
+  const user = await getCurrentUser();
+  if (!user || user.role !== Role.ADMIN) {
     return { success: false, error: "Hanya Admin yang berwenang mengedit data registrasi keluhan." };
   }
 
   try {
-    const updateData: any = {};
+    const supabase = await getSupabaseDb();
+    const updateData: any = {
+      updatedAt: new Date().toISOString(),
+    };
+
     if (data.customerName) updateData.customerName = data.customerName.trim();
+    if (data.customerContact !== undefined) updateData.customerContact = data.customerContact.trim() || null;
+    if (data.daopOrStation !== undefined) updateData.daopOrStation = data.daopOrStation.trim() || null;
     if (data.source) updateData.source = data.source;
-    if (data.date) updateData.date = new Date(data.date);
+    if (data.date) updateData.date = new Date(data.date).toISOString();
     if (data.description) updateData.description = data.description.trim();
     if (data.picId !== undefined) {
       updateData.picId = data.picId && data.picId !== "" ? data.picId : null;
     }
 
-    const updated = await prisma.complaint.update({
-      where: { id: complaintId },
-      data: updateData,
-    });
+    let { data: updated, error } = await supabase
+      .from("Complaint")
+      .update(updateData)
+      .eq("id", complaintId)
+      .select()
+      .single();
+
+    // Defensive fallback jika customerContact atau daopOrStation belum dibuat di database
+    if (
+      error &&
+      (error.message?.includes("customerContact") ||
+        error.message?.includes("daopOrStation") ||
+        error.message?.includes("schema cache"))
+    ) {
+      console.warn("Retrying edit complaint details without newly added optional columns:", error.message);
+      delete updateData.customerContact;
+      delete updateData.daopOrStation;
+
+      const retryResult = await supabase
+        .from("Complaint")
+        .update(updateData)
+        .eq("id", complaintId)
+        .select()
+        .single();
+
+      updated = retryResult.data;
+      error = retryResult.error;
+    }
+
+    if (error) {
+      console.error("Error updating complaint details in Supabase:", error);
+      return { success: false, error: error.message || "Gagal memperbarui data keluhan." };
+    }
 
     revalidatePath("/dashboard");
     return { success: true, data: updated };
