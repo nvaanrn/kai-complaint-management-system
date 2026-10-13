@@ -16,7 +16,7 @@ interface ComplaintActionModalProps {
     source: string;
     date: string;
     description: string;
-    picId?: string;
+    picId?: string | null;
   }) => Promise<void>;
   onUpdatePicProgress: (
     data: {
@@ -126,6 +126,15 @@ export default function ComplaintActionModal({
 
   // Submit Admin Edit
   const handleSubmitAdmin = async () => {
+    if (adminCustomerName.trim().length < 3) {
+      setUploadError("Nama pelapor minimal 3 karakter.");
+      return;
+    }
+    if (adminDescription.trim().length < 10) {
+      setUploadError("Uraian keluhan minimal 10 karakter.");
+      return;
+    }
+    setUploadError("");
     await onSaveAdminDetails({
       customerName: adminCustomerName.trim(),
       customerContact: adminCustomerContact.trim() || undefined,
@@ -133,12 +142,27 @@ export default function ComplaintActionModal({
       source: adminSource,
       date: adminDate,
       description: adminDescription.trim(),
-      picId: adminPicId || undefined,
+      picId: adminPicId ? adminPicId : null,
     });
   };
 
   // Submit PIC Progress
   const handleSubmitPic = async (submitForVerification: boolean) => {
+    if (submitForVerification) {
+      if (picCorrectiveAction.trim().length < 5) {
+        setUploadError("Tindakan perbaikan minimal 5 karakter sebelum diajukan ke Verifikator.");
+        return;
+      }
+      if (picPreventiveAction.trim().length < 5) {
+        setUploadError("Tindakan pencegahan minimal 5 karakter sebelum diajukan ke Verifikator.");
+        return;
+      }
+      if (!picProofImageUrl) {
+        setUploadError("Foto bukti hasil perbaikan wajib dilampirkan sebelum diajukan ke Verifikator.");
+        return;
+      }
+    }
+    setUploadError("");
     await onUpdatePicProgress(
       {
         correctiveAction: picCorrectiveAction.trim(),

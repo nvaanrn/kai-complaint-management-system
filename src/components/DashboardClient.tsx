@@ -194,7 +194,7 @@ export default function DashboardClient({
     source: string;
     date: string;
     description: string;
-    picId?: string;
+    picId?: string | null;
   }) => {
     if (!selectedComplaint) return;
     try {

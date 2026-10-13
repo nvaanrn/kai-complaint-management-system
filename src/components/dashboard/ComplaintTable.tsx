@@ -133,7 +133,7 @@ export default function ComplaintTable({
   // Pagination Math
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const validPage = Math.min(currentPage, totalPages);
+  const validPage = Math.min(Math.max(1, currentPage), totalPages);
   const startIndex = (validPage - 1) * pageSize;
   const paginatedData = filteredData.slice(startIndex, startIndex + pageSize);
 

@@ -45,12 +45,12 @@ export default function ComplaintCreateModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName.trim()) {
-      setFormError("Nama personil / pelapor wajib diisi.");
+    if (customerName.trim().length < 3) {
+      setFormError("Nama personil / pelapor minimal 3 karakter.");
       return;
     }
-    if (!description.trim()) {
-      setFormError("Uraian keluhan pelanggan wajib diisi.");
+    if (description.trim().length < 10) {
+      setFormError("Uraian keluhan pelanggan minimal 10 karakter.");
       return;
     }
 
