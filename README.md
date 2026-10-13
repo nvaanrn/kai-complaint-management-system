@@ -1,27 +1,26 @@
 # SPKP - Sistem Penanganan Keluhan Pelanggan
+**PT Kereta Api Indonesia (Persero)**
 
-> **Sistem Informasi Dokumentasi & Pengendalian Mutu Keluhan Pelanggan**  
-> **PT Kereta Api Indonesia (Persero)** — Formulir Standar Kendali Mutu: `FR.SM/TI/033.001`
+> **Sistem Informasi Pengendalian Mutu & Dokumentasi Tindak Lanjut Keluhan Pelanggan**  
+> Formulir Standar Kendali Mutu: `FR.SM/TI/033.001`
 
 ---
 
 ## 📌 Ringkasan Proyek
 
-**SPKP (Sistem Penanganan Keluhan Pelanggan)** adalah aplikasi web terintegrasi yang dirancang khusus untuk mendokumentasikan, mengoordinasikan, dan memverifikasi tindak lanjut penanganan keluhan pengguna jasa kereta api secara transparan dan akuntabel.
+**SPKP (Sistem Penanganan Keluhan Pelanggan)** adalah aplikasi web internal PT Kereta Api Indonesia (Persero) yang dirancang untuk mendokumentasikan, mengoordinasikan penugasan PIC operasional, memantau batas waktu respon (SLA), dan memverifikasi mutu penyelesaian keluhan pelanggan dari berbagai saluran resmi KAI (Access by KAI, Contact Center 121, Media Sosial, Loket Stasiun, dll).
 
-Sistem ini difokuskan sebagai **media dokumentasi dan kendali mutu internal** dengan pembagian peran yang ketat (*Three-tier Role Separation*) dan kemampuan menghasilkan output laporan resmi berformat PDF berstandar KAI.
+Sistem ini menerapkan **Pemisahan Tiga Peran (*Three-Tier Role Separation*)** secara ketat, kepatuhan *Four-Eyes Principle* dalam pengendalian mutu, serta kemampuan penerbitan berkas rekapitulasi cetak/PDF resmi berstandar KAI (`FR.SM/TI/033.001`).
 
 ---
 
 ## 👥 Peran Pengguna (Roles & Responsibilities)
 
-Sistem memiliki 3 tingkatan hak akses pengguna:
-
 | Role | Identitas Aktor | Tanggung Jawab & Wewenang |
 | :--- | :--- | :--- |
-| **`ADMIN`** | Customer Service / Pengelola Sistem | • Mencatat keluhan baru yang masuk dari berbagai saluran (Telepon, Email, Survey, Loket Langsung, dll.).<br>• **Menentukan penugasan PIC secara mutlak** sesuai jenis keluhan.<br>• Mengelola data pokok keluhan dan memonitor dashboard rekapitulasi.<br>• Menerbitkan dokumen laporan resmi cetak/PDF (`FR.SM/TI/033.001`). |
-| **`PIC`** | Petugas Lapangan / Eksekutor | • **Melihat seluruh keluhan** yang ada di dalam sistem guna pemantauan & koordinasi.<br>• **Hanya berwenang mengeksekusi keluhan yang ditugaskan kepada dirinya** oleh Admin.<br>• Mendokumentasikan **Tindakan Perbaikan (*Corrective Action*)** dan **Tindakan Pencegahan (*Preventive Action*)**.<br>• **Wajib mengunggah foto bukti hasil perbaikan** ke Supabase Storage sebelum mengajukan verifikasi.<br>• Mengajukan keluhan yang selesai ditangani ke tahap verifikasi (*Submit for Verification*). |
-| **`VERIFIKATOR`** | Tim Kendali Mutu / Quality Assurance | • Memeriksa keabsahan dan efektivitas tindakan penanganan serta **meninjau foto bukti perbaikan** yang diajukan oleh PIC.<br>• Memberikan keputusan: **Disetujui (*Approved*)** atau **Ditolak (*Rejected*)**.<br>• Wajib menyertakan catatan evaluasi/feedback perbaikan jika keluhan ditolak agar ditangani ulang oleh PIC. |
+| **`ADMIN`** | Customer Service / Pengelola Sistem | • Mencatat registrasi keluhan baru yang masuk.<br>• **Menentukan penugasan PIC** sesuai jenis keluhan.<br>• Mengelola data pokok registrasi dan memonitor dashboard operasional.<br>• Menyetujui atau menolak permohonan pembukaan kembali (*reopen*) keluhan.<br>• Menerbitkan dokumen laporan resmi cetak/PDF (`FR.SM/TI/033.001`).<br>• **Dilarang melakukan verifikasi mutu keluhan** (*Four-Eyes Principle*). |
+| **`PIC`** | Petugas Lapangan / Unit Kerja Terkait | • Melihat seluruh keluhan yang ada di dalam sistem untuk transparansi operasional.<br>• Memiliki filter cepat **"Tugas Saya"**.<br>• **Hanya berwenang mengeksekusi keluhan yang ditugaskan kepada dirinya** (`picId === user.id`).<br>• Mendokumentasikan **Tindakan Perbaikan (*Corrective Action*)** dan **Tindakan Pencegahan (*Preventive Action*)**.<br>• **Mengunggah foto bukti hasil perbaikan lapangan ke Cloudinary** sebelum mengajukan verifikasi.<br>• Mengajukan hasil penanganan ke tahap verifikasi (*Submit for Verification*). |
+| **`VERIFIKATOR`** | Tim Kendali Mutu / Quality Assurance | • Memeriksa keabsahan dan efektivitas tindakan penanganan serta foto bukti fisik lapangan dari PIC.<br>• **Pemegang wewenang eksklusif** untuk memberikan keputusan: **Disetujui (*Approved*)** atau **Ditolak (*Rejected*)**.<br>• Wajib menyertakan catatan evaluasi/alasan penolakan jika keluhan dikembalikan ke PIC untuk perbaikan ulang. |
 
 ---
 
@@ -29,24 +28,30 @@ Sistem memiliki 3 tingkatan hak akses pengguna:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> BELUM_DITANGANI : Admin input keluhan baru
-    BELUM_DITANGANI --> DALAM_PENANGANAN : Admin menugaskan PIC (Mutlak)
-    DALAM_PENANGANAN --> MENUNGGU_VERIFIKASI : PIC input tindakan, upload foto bukti, & submit
-    MENUNGGU_VERIFIKASI --> TERVERIFIKASI : Verifikator Menyetujui (Approved)
-    MENUNGGU_VERIFIKASI --> DALAM_PENANGANAN : Verifikator Menolak (Rejected + Catatan Perbaikan)
-    TERVERIFIKASI --> [*] : Diekspor ke PDF Resmi via @react-pdf/renderer
+    [*] --> BELUM_DITANGANI : Admin input keluhan baru (tanpa PIC)
+    [*] --> DALAM_PENANGANAN : Admin input keluhan baru (langsung tunjuk PIC)
+    BELUM_DITANGANI --> DALAM_PENANGANAN : Admin menugaskan PIC
+    DALAM_PENANGANAN --> MENUNGGU_VERIFIKASI : PIC input tindakan, upload bukti foto, & submit
+    MENUNGGU_VERIFIKASI --> TERVERIFIKASI : Verifikator menyetujui (Approved)
+    MENUNGGU_VERIFIKASI --> DALAM_PENANGANAN : Verifikator menolak (Rejected, PIC tetap sama)
+    TERVERIFIKASI --> MENUNGGU_REOPEN : Pengajuan permohonan buka kembali
+    MENUNGGU_REOPEN --> DALAM_PENANGANAN : Admin menyetujui reopen (PIC default)
+    MENUNGGU_REOPEN --> TERVERIFIKASI : Admin menolak reopen (Status tetap)
+    TERVERIFIKASI --> [*] : Diterbitkan dalam Berkas Arsip FR.SM/TI/033.001
 ```
 
 ---
 
-## 🛠️ Arsitektur & Teknologi
+## 🛠️ Arsitektur & Teknologi Aktual
 
 - **Frontend & App Framework:** [Next.js 14](https://nextjs.org/) (App Router, Server Components & Server Actions)
 - **UI Library & Styling:** [React 18](https://react.dev/), [Tailwind CSS v3](https://tailwindcss.com/)
-- **Autentikasi & Keamanan:** [Supabase Auth](https://supabase.com/docs/guides/auth) via `@supabase/ssr` (Cookie-based Session, Server-side JWT Verification via `getUser()`, Protected Middleware)
-- **Penyimpanan Berkas (Storage):** [Supabase Storage](https://supabase.com/docs/guides/storage) (Bucket: `complaint-proofs` untuk foto bukti perbaikan lapangan)
-- **Database & Query:** [PostgreSQL](https://www.postgresql.org/) di Supabase Cloud & [Prisma ORM v5](https://www.prisma.io/)
-- **Dokumen & PDF Export:** [@react-pdf/renderer](https://react-pdf.org/) (Menghasilkan berkas PDF A4 Landscape standar KAI `FR.SM/TI/033.001` secara presisi dan dapat diunduh langsung di peramban)
+- **Autentikasi & Keamanan:** [NextAuth.js v4](https://next-auth.js.org/) (Credentials Provider, Password Hash via `bcryptjs`, JWT Session maxAge 8 jam, Protected Middleware)
+- **Penyimpanan Berkas Foto Bukti:** [Cloudinary](https://cloudinary.com/) (Folder: `spkp-kai/proof-images`, upload via buffer stream, kompresi otomatis)
+- **Database & ORM:** [MySQL](https://www.mysql.com/) (Database: `spkp_kai`) & [Prisma ORM v5](https://www.prisma.io/)
+- **Dokumen & PDF Export:** [@react-pdf/renderer](https://react-pdf.org/) (Format presisi A4 Landscape standar KAI `FR.SM/TI/033.001`)
+- **Excel Export:** [SheetJS (xlsx)](https://docs.sheetjs.com/) (Rekapitulasi spreadsheet operasional)
+- **Pengujian (Testing):** [Vitest](https://vitest.dev/) (Unit tests untuk RBAC, Validasi Form, SLA, Nomor Keluhan)
 - **Bahasa Pemrograman:** [TypeScript](https://www.typescriptlang.org/) (Strict Mode)
 
 ---
@@ -55,29 +60,43 @@ stateDiagram-v2
 
 ```text
 SPKP/
-├── .agents/                    # Agent skills & konfigurasi IDE Antigravity
+├── docs/                       # Dokumentasi spesifikasi & audit teknis
+│   ├── aturan-bisnis.md        # Spesifikasi aturan bisnis resmi
+│   ├── state-machine.md        # Spesifikasi Finite State Machine (FSM)
+│   ├── matriks-hak-akses.md    # Matriks RBAC 3 peran (Admin, PIC, Verifikator)
+│   ├── aturan-sla.md           # Aturan kalkulasi SLA per kategori
+│   ├── arsitektur-skema-database.md # Spesifikasi skema database & relasi
+│   └── audit-awal.md           # Laporan audit komprehensif Fase 1
 ├── prisma/
-│   ├── schema.prisma           # Skema database relasional (User, Complaint, Verification, Document)
-│   └── seed.ts                 # Script seeding data awal staf dan contoh keluhan
+│   ├── schema.prisma           # Skema database MySQL (User, Complaint, Verification, SlaPolicy, ReopenRequest, Document, AuditLog)
+│   ├── seed.ts                 # Script seeding master data staf demo, SlaPolicy, dan sample keluhan
+│   └── migrations/             # Berkas migrasi database Prisma Migrate
+├── scripts/
+│   └── backup-db.ts            # Script backup pencadangan mandiri data ke JSON
 ├── src/
 │   ├── app/
-│   │   ├── actions/            # Next.js Server Actions (complaints.ts)
-│   │   ├── auth/callback/      # Route handler penukaran kode sesi Supabase
+│   │   ├── actions/            # Next.js Server Actions (complaints.ts, auth.ts)
+│   │   ├── api/
+│   │   │   ├── auth/[...nextauth]/ # NextAuth Route Handler
+│   │   │   └── upload/         # Route Handler upload foto bukti ke Cloudinary
 │   │   ├── dashboard/          # Halaman portal utama sistem penanganan keluhan
-│   │   ├── login/              # Halaman autentikasi kredensial staf
+│   │   ├── login/              # Halaman autentikasi kredensial staf KAI
 │   │   ├── layout.tsx          # Root layout aplikasi
 │   │   └── page.tsx            # Redirect rute landing
 │   ├── components/             # Komponen UI (DashboardClient, KaiDocumentModal, LogoutButton, dll.)
+│   │   └── pdf/                # Komponen renderer dokumen PDF resmi KAI
 │   ├── lib/
-│   │   ├── auth.ts             # Server auth helpers (getCurrentUser, requireUser)
-│   │   ├── prisma.ts           # Instansiasi PrismaClient singleton
-│   │   └── supabase/           # Modul Supabase terisolasi (client.ts, server.ts, admin.ts)
-│   ├── middleware.ts           # Middleware proteksi rute & refresh sesi SSR Supabase
+│   │   ├── auth-options.ts     # Konfigurasi NextAuth (Credentials Provider & JWT callbacks)
+│   │   ├── auth.ts             # Auth helpers (getCurrentUser, requireUser)
+│   │   ├── cloudinary.ts       # Inisialisasi Cloudinary SDK
+│   │   ├── permissions.ts      # Matriks hak akses & guard RBAC
+│   │   ├── prisma.ts           # PrismaClient singleton
+│   │   ├── sla.ts              # Modul perhitungan audit SLA keluhan
+│   │   └── validation.ts       # Modul validasi form input
+│   ├── middleware.ts           # Middleware proteksi rute aplikasi
 │   └── types/                  # Definisi antarmuka TypeScript
-├── supabase/
-│   ├── config.toml             # Konfigurasi proyek Supabase
-│   └── migrations/             # Berkas migrasi database SQL (initial_schema.sql)
-├── .env.example                # Template variabel lingkungan
+├── tests/                      # Unit test suites (Vitest)
+├── .env.example                # Template variabel lingkungan aktual
 ├── package.json
 └── README.md
 ```
@@ -88,7 +107,7 @@ SPKP/
 
 ### 1. Prasyarat Sistem
 - Node.js versi 18.17+ atau 20+
-- Akun / Project di [Supabase](https://supabase.com/)
+- Database MySQL aktif (misalnya via XAMPP MySQL di port 3306)
 
 ### 2. Kloning & Instalasi Dependensi
 ```bash
@@ -102,27 +121,33 @@ Salin berkas template lingkungan:
 ```bash
 cp .env.example .env
 ```
-Lengkapi nilai pada berkas `.env` sesuai kredensial proyek Supabase Anda:
+Pastikan variabel lingkungan pada `.env` telah disesuaikan:
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sbp_...
-NEXT_SERVICE_ROLE_KEY=eyJ...
-DATABASE_URL=postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true
-DIRECT_URL=postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+# Database MySQL Lokal
+DATABASE_URL="mysql://root:@localhost:3306/spkp_kai"
+
+# NextAuth.js
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="your-super-secret-key-32-chars-min"
+
+# Cloudinary (Upload Foto Bukti Lapangan)
+CLOUDINARY_CLOUD_NAME="your_cloud_name"
+CLOUDINARY_API_KEY="your_api_key"
+CLOUDINARY_API_SECRET="your_api_secret"
 ```
 
-### 4. Sinkronisasi Database & Seeding
-Terapkan skema database dan jalankan pengisian data awal (*seeding* akun demo & sample keluhan):
+### 4. Migrasi Database & Seeding
+Jalankan migrasi database Prisma dan pengisian data master/demo:
 ```bash
-npx prisma db push
-npx prisma db seed
+npx prisma migrate dev
+npx tsx prisma/seed.ts
 ```
 
-### 5. Jalankan Server Pengembangan
+### 5. Menjalankan Server Pengembangan
 ```bash
 npm run dev
 ```
-Buka browser dan akses alamat: [http://localhost:3001](http://localhost:3001).
+Buka browser dan akses: [http://localhost:3000](http://localhost:3000) (atau port yang aktif).
 
 ---
 
@@ -132,14 +157,26 @@ Setelah menjalankan script seed, akun berikut siap digunakan:
 
 | Role | Email | Password | Kegunaan Uji Coba |
 | :--- | :--- | :--- | :--- |
-| **Admin / CS** | `admin@spkp.kai.id` | `password123` | Registrasi keluhan, penugasan PIC, cetak laporan PDF |
-| **PIC Lapangan** | `pic@spkp.kai.id` | `password123` | Input tindakan perbaikan & pencegahan, submit verifikasi |
-| **Verifikator** | `verifikator@spkp.kai.id` | `password123` | Tinjau hasil PIC, approve atau reject keluhan |
+| **Admin / CS** | `admin@spkp.kai.id` | `password123` | Registrasi keluhan, penugasan PIC, reopen approval, cetak laporan PDF |
+| **PIC Lapangan** | `pic@spkp.kai.id` | `password123` | Input tindakan perbaikan & pencegahan, upload foto bukti, submit verifikasi |
+| **Verifikator** | `verifikator@spkp.kai.id` | `password123` | Tinjau hasil PIC & bukti foto, approve atau reject penanganan |
 
-*(Halaman login juga telah dilengkapi tombol **Quick Fill** untuk pengujian instan antar-peran).*
+*(Halaman login telah dilengkapi tombol **Quick Fill** untuk pengujian instan antar-peran).*
 
 ---
 
-## 📄 Dokumen Spesifikasi Terkait
-- [PRD.md](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/PRD.md) — *Product Requirements Document* lengkap
-- [TODO.md](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/TODO.md) — Roadmap checklist pengembangan dan peningkatan fitur
+## 🧪 Pengujian & Pengecekan Kualitas Kode
+
+```bash
+# Menjalankan seluruh unit test (Vitest)
+npm test
+
+# Pengecekan tipe statis (TypeScript)
+npx tsc --noEmit
+
+# Pengecekan linting kode (ESLint)
+npm run lint
+
+# Kompilasi produksi (Next.js Build)
+npm run build
+```

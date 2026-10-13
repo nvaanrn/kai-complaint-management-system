@@ -122,4 +122,41 @@
   - [x] Pembuatan script [scripts/backup-db.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/scripts/backup-db.ts) dan perintah `npm run db:backup` untuk mengekspor snapshot data seluruh tabel (`User`, `Complaint`, `Verification`, `Document`) secara instan.
   - [x] Penyimpanan otomatis berkas snapshot bertimestamp ke folder `backups/` (sudah dimasukkan ke `.gitignore`).
 
+---
+
+## 🐬 Fase 5: Migrasi ke MySQL (XAMPP) + NextAuth + Cloudinary
+
+- [x] **Pembersihan Dependensi & Arsitektur Supabase:**
+  - [x] Uninstall paket `@supabase/ssr`, `@supabase/supabase-js`, dan `supabase` CLI.
+  - [x] Hapus direktori `src/lib/supabase/` dan `supabase/migrations/`.
+  - [x] Pasang paket `next-auth@4` dan `cloudinary`.
+- [x] **Konfigurasi Autentikasi NextAuth.js:**
+  - [x] Route handler NextAuth: [src/app/api/auth/[...nextauth]/route.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/api/auth/[...nextauth]/route.ts) dengan bcrypt dan peran KAI (Admin, PIC, Verifikator).
+  - [x] Penggantian session resolver [src/lib/auth.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/lib/auth.ts) (`getCurrentUser()`, `requireUser()`).
+  - [x] Middleware proteksi rute [src/middleware.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/middleware.ts) berbasis NextAuth.
+  - [x] Halaman login [src/app/login/page.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/login/page.tsx) dan [src/components/LogoutButton.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/LogoutButton.tsx).
+- [x] **Refactoring Query & Storage ke MySQL:**
+  - [x] Konfigurasi provider `mysql` dan ID `uuid()` pada [prisma/schema.prisma](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/schema.prisma).
+  - [x] Konversi seluruh query di [src/app/actions/complaints.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/actions/complaints.ts) dan [src/app/dashboard/page.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/dashboard/page.tsx) ke Prisma Client.
+  - [x] Penyediaan endpoint upload Cloudinary [src/app/api/upload/route.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/api/upload/route.ts) dan [src/lib/cloudinary.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/lib/cloudinary.ts).
+  - [x] Pengalihan upload foto bukti di [src/components/DashboardClient.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/DashboardClient.tsx) ke endpoint `/api/upload`.
+  - [x] Pembersihan sinkronisasi Supabase di [prisma/seed.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/seed.ts) dan adaptasi [scripts/backup-db.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/scripts/backup-db.ts) ke Prisma.
+  - [x] Konfigurasi koneksi MySQL di [.env](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/.env) (`DATABASE_URL="mysql://root:@localhost:3306/spkp_kai"`).
+- [x] **Migrasi & Seeding Database MySQL (XAMPP):**
+  - [x] Pembuatan database `spkp_kai` di MySQL XAMPP.
+  - [x] Eksekusi `npx prisma migrate dev --name init_mysql`.
+  - [x] Eksekusi `npx prisma db seed`.
+  - [x] Uji coba script pencadangan database MySQL (`npm run db:backup`).
+- [x] **Uji Fungsionalitas & Validasi QA End-to-End (Browser Subagent):**
+  - [x] Autentikasi kredensial NextAuth (`admin@spkp.kai.id` / `password123`) berhasil validasi password bcrypt dari MySQL.
+  - [x] Redirect mulus ke `/dashboard` dengan role badge `ADMIN` ("Administrator SPKP").
+  - [x] Data tabel keluhan dari MySQL XAMPP (`CMP-2026-001`, `CMP-2026-002`, `CMP-2026-003`) tampil akurat.
+  - [x] Modal detail keluhan interaktif dapat dibuka dan ditutup dengan data lengkap.
+- [x] **Revisi Fungsionalitas Role Admin & Redesain Dashboard:**
+  - [x] Sembunyikan tombol ekspor Excel (`.xlsx`) di sidebar dan toolbar khusus untuk role Admin.
+  - [x] Hilangkan indikator deadline/tenggat waktu SLA pengerjaan PIC dari kolom status tabel dan modal detail keluhan.
+  - [x] Ubah tema sidebar ke **Dark Executive Navy** (`bg-slate-900`) dengan kontras aksen oranye dan biru khas KAI.
+  - [x] Restrukturisasi form *"Catat Keluhan Baru"* menjadi format **vertikal satu kolom** yang lega dan nyaman diisi.
+  - [x] Integrasikan grafik *"Analisis Saluran"* eksklusif pada menu **Ringkasan & Metrik**, sehingga menu Daftar Keluhan dan Verifikasi Mutu lebih ringkas dan fokus.
+
 
