@@ -13,7 +13,6 @@ import SourceComparisonChart from "@/components/SourceComparisonChart";
 import KaiDocumentModal from "@/components/KaiDocumentModal";
 import LogoutButton from "@/components/LogoutButton";
 import Image from "next/image";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { exportComplaintsToExcel } from "@/lib/exportExcel";
 
 export type { ComplaintData, UserSummary } from "@/types/database";
@@ -118,7 +117,7 @@ export default function DashboardClient({
   // Mobile sidebar toggle
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  // Upload handler for proof image to Supabase Storage
+  // Upload handler for proof image to Cloudinary via /api/upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -130,31 +129,24 @@ export default function DashboardClient({
 
     setUploadingImage(true);
     try {
-      const supabase = createBrowserSupabaseClient();
-      const fileExt = file.name.split(".").pop();
-      const fileName = `proof_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `complaints/${fileName}`;
+      const formData = new FormData();
+      formData.append("file", file);
 
-      const { error: uploadError } = await supabase.storage
-        .from("complaint-proofs")
-        .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: false,
-        });
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-      if (uploadError) {
-        throw uploadError;
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal mengunggah foto.");
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("complaint-proofs")
-        .getPublicUrl(filePath);
-
-      setEditProofImageUrl(publicUrl);
-      showToast("Foto bukti berhasil diunggah ke Supabase!");
+      setEditProofImageUrl(data.url);
+      showToast("Foto bukti berhasil diunggah!");
     } catch (err: any) {
       console.error("Gagal upload foto:", err);
-      showToast(err.message || "Gagal mengunggah foto ke Supabase Storage.", "error");
+      showToast(err.message || "Gagal mengunggah foto bukti.", "error");
     } finally {
       setUploadingImage(false);
     }
@@ -247,7 +239,7 @@ export default function DashboardClient({
         return;
       }
       if (!editProofImageUrl) {
-        showToast("Petugas wajib mengunggah foto bukti hasil perbaikan ke Supabase sebelum mengajukan verifikasi.", "error");
+        showToast("Petugas wajib mengunggah foto bukti hasil perbaikan sebelum mengajukan verifikasi.", "error");
         return;
       }
     }
@@ -296,8 +288,8 @@ export default function DashboardClient({
   const handleVerify = async (result: VerificationResult) => {
     if (!selectedComplaint) return;
 
-    if (result === VerificationResult.REJECTED && (!verificationFeedback || verificationFeedback.trim() === "")) {
-      showToast("Alasan penolakan wajib diisi agar PIC dapat melakukan perbaikan.", "error");
+    if (!verificationFeedback || verificationFeedback.trim() === "") {
+      showToast("Hasil / kesimpulan verifikasi wajib diisi secara manual.", "error");
       return;
     }
 
@@ -487,32 +479,36 @@ export default function DashboardClient({
     }
   };
 
-  // SLA Badge Component (Target Waktu Penanganan KAI: 24 Jam)
+  // SLA Badge Component (Target Waktu Penanganan dari snapshot SLA per kategori keluhan)
   const renderSlaBadge = (item: ComplaintData) => {
     const startTime = new Date(item.date).getTime();
+    const targetHours = item.slaTargetHours ?? 24;
     const isCompleted = item.status === ComplaintStatus.TERVERIFIKASI;
     const isSubmitted = !!item.submittedAt || item.status === ComplaintStatus.MENUNGGU_VERIFIKASI;
 
     if (isCompleted || isSubmitted) {
-      const endTime = item.submittedAt
+      // Untuk keluhan terverifikasi, gunakan completedAt; untuk submitted, gunakan submittedAt
+      const endTime = (isCompleted && item.completedAt)
+        ? new Date(item.completedAt).getTime()
+        : item.submittedAt
         ? new Date(item.submittedAt).getTime()
         : new Date(item.createdAt).getTime();
       const elapsedHours = Math.max(0, Math.round((endTime - startTime) / 3600000));
 
-      if (elapsedHours <= 24) {
+      if (elapsedHours <= targetHours) {
         return (
           <span
-            title={`Keluhan diajukan/diselesaikan dalam ${elapsedHours} jam sejak diterima (SLA Terpenuhi)`}
+            title={`Keluhan diajukan/diselesaikan dalam ${elapsedHours} jam sejak diterima (SLA Terpenuhi, target ${targetHours}j)`}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"
           >
             <span>✓</span> SLA OK ({elapsedHours}j)
           </span>
         );
       } else {
-        const overHours = elapsedHours - 24;
+        const overHours = elapsedHours - targetHours;
         return (
           <span
-            title={`Penyelesaian membutuhkan ${elapsedHours} jam (Melewati batas SLA 24 jam)`}
+            title={`Penyelesaian membutuhkan ${elapsedHours} jam (Melewati batas SLA ${targetHours} jam)`}
             className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200"
           >
             <span>⚠️</span> Lewat SLA (+{overHours}j)
@@ -523,12 +519,12 @@ export default function DashboardClient({
 
     // Keluhan Masih Aktif (BELUM_DITANGANI / DALAM_PENANGANAN)
     const elapsedNowHours = (Date.now() - startTime) / 3600000;
-    const remainingHours = Math.round(24 - elapsedNowHours);
+    const remainingHours = Math.round(targetHours - elapsedNowHours);
 
     if (remainingHours <= 0) {
       return (
         <span
-          title={`Telah melampaui batas waktu penanganan 24 jam (+${Math.abs(remainingHours)} jam)`}
+          title={`Telah melampaui batas waktu penanganan ${targetHours} jam (+${Math.abs(remainingHours)} jam)`}
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse"
         >
           <span>🚨</span> Overdue (+{Math.abs(remainingHours)}j)
@@ -537,7 +533,7 @@ export default function DashboardClient({
     } else if (remainingHours <= 6) {
       return (
         <span
-          title={`Mendekati batas waktu SLA 24 jam (Sisa ${remainingHours} jam)`}
+          title={`Mendekati batas waktu SLA ${targetHours} jam (Sisa ${remainingHours} jam)`}
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-300"
         >
           <span>⏱️</span> Sisa {remainingHours}j
@@ -546,7 +542,7 @@ export default function DashboardClient({
     } else {
       return (
         <span
-          title={`Target SLA: 24 jam. Sisa waktu penanganan: ${remainingHours} jam`}
+          title={`Target SLA: ${targetHours} jam. Sisa waktu penanganan: ${remainingHours} jam`}
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200"
         >
           <span>⏱️</span> Sisa {remainingHours}j
@@ -572,28 +568,30 @@ export default function DashboardClient({
       )}
 
       {/* ======================================================== */}
-      {/* 1. LEFT-ALIGNED SIDEBAR (DESKTOP & RESPONSIVE) */}
+      {/* 1. LEFT-ALIGNED SIDEBAR (DESKTOP & RESPONSIVE - DARK NAVY THEME) */}
       {/* ======================================================== */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between transition-transform duration-200 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col justify-between transition-transform duration-200 lg:translate-x-0 ${
           isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Brand Header with Official KAI Logo */}
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="p-5 border-b border-slate-800 flex items-center justify-between">
             <div className="flex flex-col">
-              <Image
-                src="/kai-logo.png"
-                alt="KAI Logo Resmi"
-                width={120}
-                height={36}
-                className="h-9 w-auto object-contain self-start"
-                priority
-                unoptimized
-              />
-              <div className="mt-2.5">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              <div className="bg-white px-2 py-1.5 rounded-lg w-fit shadow-xs inline-block">
+                <Image
+                  src="/kai-logo.png"
+                  alt="KAI Logo Resmi"
+                  width={110}
+                  height={32}
+                  className="h-7 w-auto object-contain"
+                  priority
+                  unoptimized
+                />
+              </div>
+              <div className="mt-3">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-orange-400 bg-orange-950/70 px-2 py-0.5 rounded border border-orange-800/60 inline-block">
                   SPKP FR.SM/TI/033.001
                 </span>
                 <p className="text-[11px] text-slate-400 mt-1">
@@ -604,7 +602,7 @@ export default function DashboardClient({
 
             <button
               onClick={() => setIsMobileSidebarOpen(false)}
-              className="lg:hidden text-slate-400 hover:text-slate-600 text-lg"
+              className="lg:hidden text-slate-400 hover:text-white text-lg p-1"
             >
               &times;
             </button>
@@ -612,7 +610,7 @@ export default function DashboardClient({
 
           {/* Navigation Links */}
           <nav className="p-4 space-y-1.5 flex-1 overflow-y-auto">
-            <div className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               Menu Navigasi
             </div>
 
@@ -623,8 +621,8 @@ export default function DashboardClient({
               }}
               className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 activeMenu === "overview"
-                  ? "bg-blue-900 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
               }`}
             >
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -640,8 +638,8 @@ export default function DashboardClient({
               }}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 activeMenu === "complaints"
-                  ? "bg-blue-900 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -650,8 +648,8 @@ export default function DashboardClient({
                 </svg>
                 <span>Daftar Keluhan</span>
               </div>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                activeMenu === "complaints" ? "bg-blue-800 text-white" : "bg-slate-100 text-slate-600"
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                activeMenu === "complaints" ? "bg-blue-700 text-white" : "bg-slate-800 text-slate-300 border border-slate-700"
               }`}>
                 {complaints.length}
               </span>
@@ -664,8 +662,8 @@ export default function DashboardClient({
               }}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 activeMenu === "verifications"
-                  ? "bg-blue-900 text-white shadow-xs"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -675,7 +673,7 @@ export default function DashboardClient({
                 <span>Verifikasi Mutu</span>
               </div>
               {countVerif > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-purple-100 text-purple-800 animate-pulse">
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-900/80 text-purple-200 border border-purple-700 animate-pulse">
                   {countVerif}
                 </span>
               )}
@@ -683,45 +681,48 @@ export default function DashboardClient({
 
             <button
               onClick={() => setIsDocModalOpen(true)}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition cursor-pointer"
             >
-              <svg className="w-4 h-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <span>Dokumen Cetak KAI</span>
             </button>
 
-            <button
-              onClick={() => {
-                exportComplaintsToExcel(filteredComplaints);
-                showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
-              }}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-emerald-800 hover:bg-emerald-50 transition cursor-pointer"
-            >
-              <svg className="w-4 h-4 shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span>Ekspor Rekap Excel</span>
-            </button>
+            {/* Ekspor Excel Button - Disembunyikan untuk Admin sesuai permintaan */}
+            {currentUser.role !== Role.ADMIN && (
+              <button
+                onClick={() => {
+                  exportComplaintsToExcel(filteredComplaints);
+                  showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-emerald-400 hover:bg-emerald-950/40 hover:text-emerald-300 transition cursor-pointer"
+              >
+                <svg className="w-4 h-4 shrink-0 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Ekspor Rekap Excel</span>
+              </button>
+            )}
           </nav>
 
           {/* User Profile Card at Sidebar Footer */}
-          <div className="p-4 border-t border-slate-100 bg-slate-50/60">
+          <div className="p-4 border-t border-slate-800 bg-slate-950/70">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-900 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
                 {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate">
+                <p className="text-xs font-bold text-white truncate">
                   {currentUser.name || "Petugas SPKP"}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                  <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded border ${
                     currentUser.role === Role.ADMIN
-                      ? "bg-rose-100 text-rose-800"
+                      ? "bg-rose-950 text-rose-300 border-rose-800"
                       : currentUser.role === Role.VERIFIKATOR
-                      ? "bg-purple-100 text-purple-800"
-                      : "bg-blue-100 text-blue-900"
+                      ? "bg-purple-950 text-purple-300 border-purple-800"
+                      : "bg-blue-950 text-blue-300 border-blue-800"
                   }`}>
                     {currentUser.role}
                   </span>
@@ -797,130 +798,175 @@ export default function DashboardClient({
         </header>
 
         {/* Main Body */}
-        <main className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Hero Welcome Greeting */}
-          <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white rounded-2xl p-6 md:p-7 shadow-xs relative overflow-hidden">
-            <div className="relative z-10 space-y-1">
-              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-blue-200 border border-white/10">
-                PT Kereta Api Indonesia (Persero)
-              </div>
-              <h2 className="text-xl md:text-2xl font-black tracking-tight text-white">
-                Selamat Datang, {currentUser.name || "Petugas SPKP"} 👋
-              </h2>
-              <p className="text-xs md:text-sm text-blue-100/80 max-w-2xl leading-relaxed">
-                {currentUser.role === Role.ADMIN && "Anda memiliki kewenangan penuh mencatat keluhan, menentukan PIC, serta mengelola dokumen kendali mutu FR.SM/TI/033.001."}
-                {currentUser.role === Role.PIC && `Terdapat ${countMyTasks} keluhan yang ditugaskan ke Anda. Segera lakukan tindakan perbaikan & ajukan verifikasi.`}
-                {currentUser.role === Role.VERIFIKATOR && `Terdapat ${countVerif} keluhan menunggu verifikasi mutu. Periksa hasil penanganan teknis dari PIC.`}
-              </p>
-            </div>
-          </div>
-
-          {/* KPI Soft Pastel Stat Cards */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div
-              onClick={() => setStatusFilter("BELUM_DITANGANI")}
-              className={`p-5 rounded-2xl border bg-white shadow-2xs cursor-pointer transition hover:shadow-md ${
-                statusFilter === "BELUM_DITANGANI"
-                  ? "ring-2 ring-amber-500 border-amber-300"
-                  : "border-slate-200/80"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Belum Ditangani
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-              </div>
-              <div className="mt-3 flex items-baseline justify-between">
-                <span className="text-3xl font-black text-amber-600">{countBelum}</span>
-                <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800">
-                  Antrean Baru
-                </span>
-              </div>
-            </div>
-
-            <div
-              onClick={() => setStatusFilter("DALAM_PENANGANAN")}
-              className={`p-5 rounded-2xl border bg-white shadow-2xs cursor-pointer transition hover:shadow-md ${
-                statusFilter === "DALAM_PENANGANAN"
-                  ? "ring-2 ring-sky-500 border-sky-300"
-                  : "border-slate-200/80"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Dalam Penanganan
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
-              </div>
-              <div className="mt-3 flex items-baseline justify-between">
-                <span className="text-3xl font-black text-sky-600">{countDalam}</span>
-                <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-sky-50 text-sky-800">
-                  Proses PIC
-                </span>
-              </div>
-            </div>
-
-            <div
-              onClick={() => setStatusFilter("MENUNGGU_VERIFIKASI")}
-              className={`p-5 rounded-2xl border bg-white shadow-2xs cursor-pointer transition hover:shadow-md ${
-                statusFilter === "MENUNGGU_VERIFIKASI"
-                  ? "ring-2 ring-purple-500 border-purple-300"
-                  : "border-slate-200/80"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Menunggu Verifikasi
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse"></span>
-              </div>
-              <div className="mt-3 flex items-baseline justify-between">
-                <span className="text-3xl font-black text-purple-600">{countVerif}</span>
-                <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-purple-50 text-purple-800">
-                  Review Mutu
-                </span>
-              </div>
-            </div>
-
-            <div
-              onClick={() => setStatusFilter("TERVERIFIKASI")}
-              className={`p-5 rounded-2xl border bg-white shadow-2xs cursor-pointer transition hover:shadow-md ${
-                statusFilter === "TERVERIFIKASI"
-                  ? "ring-2 ring-emerald-500 border-emerald-300"
-                  : "border-slate-200/80"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Terverifikasi
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-              </div>
-              <div className="mt-3 flex items-baseline justify-between">
-                <span className="text-3xl font-black text-emerald-600">{countSelesai}</span>
-                <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-emerald-50 text-emerald-800">
-                  Selesai Valid
-                </span>
-              </div>
-            </div>
-          </section>
-
+        <main className="p-5 md:p-7 space-y-6 max-w-7xl mx-auto w-full">
           {/* ======================================================== */}
-          {/* GRAFIK PERBANDINGAN SUMBER KELUHAN (COLLAPSIBLE UNTUK ADMIN) */}
+          {/* TAMPILAN 1: MENU RINGKASAN & METRIK (OVERVIEW)           */}
           {/* ======================================================== */}
-          {currentUser.role === Role.ADMIN && showAdminChart && (
-            <div className="animate-in fade-in slide-in-from-top-3 duration-200">
-              <SourceComparisonChart
-                complaints={complaints}
-                activeFilter={sourceFilter}
-                onSelectSource={(src) => setSourceFilter(src)}
-              />
+          {activeMenu === "overview" && (
+            <div className="space-y-6">
+              {/* Hero Welcome Greeting */}
+              <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white rounded-2xl p-5 md:p-6 shadow-xs relative overflow-hidden">
+                <div className="relative z-10 space-y-1">
+                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-blue-200 border border-white/10">
+                    PT Kereta Api Indonesia (Persero)
+                  </div>
+                  <h2 className="text-xl md:text-2xl font-black tracking-tight text-white">
+                    Selamat Datang, {currentUser.name || "Petugas SPKP"} 👋
+                  </h2>
+                  <p className="text-xs md:text-sm text-blue-100/80 max-w-2xl leading-relaxed">
+                    {currentUser.role === Role.ADMIN && "Anda memiliki kewenangan penuh mencatat keluhan, menentukan PIC, serta mengelola dokumen kendali mutu FR.SM/TI/033.001."}
+                    {currentUser.role === Role.PIC && `Terdapat ${countMyTasks} keluhan yang ditugaskan ke Anda. Segera lakukan tindakan perbaikan & ajukan verifikasi.`}
+                    {currentUser.role === Role.VERIFIKATOR && `Terdapat ${countVerif} keluhan menunggu verifikasi mutu. Periksa hasil penanganan teknis dari PIC.`}
+                  </p>
+                </div>
+              </div>
+
+              {/* KPI Stat Cards */}
+              <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div
+                  onClick={() => setStatusFilter("BELUM_DITANGANI")}
+                  className={`p-5 rounded-2xl border bg-white shadow-sm cursor-pointer transition hover:shadow-md ${
+                    statusFilter === "BELUM_DITANGANI"
+                      ? "ring-2 ring-amber-500 border-amber-300"
+                      : "border-slate-200/80"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Belum Ditangani
+                    </span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <span className="text-3xl font-black text-amber-600">{countBelum}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800">
+                      Antrean Baru
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setStatusFilter("DALAM_PENANGANAN")}
+                  className={`p-5 rounded-2xl border bg-white shadow-sm cursor-pointer transition hover:shadow-md ${
+                    statusFilter === "DALAM_PENANGANAN"
+                      ? "ring-2 ring-sky-500 border-sky-300"
+                      : "border-slate-200/80"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Dalam Penanganan
+                    </span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <span className="text-3xl font-black text-sky-600">{countDalam}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-sky-50 text-sky-800">
+                      Proses PIC
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setStatusFilter("MENUNGGU_VERIFIKASI")}
+                  className={`p-5 rounded-2xl border bg-white shadow-sm cursor-pointer transition hover:shadow-md ${
+                    statusFilter === "MENUNGGU_VERIFIKASI"
+                      ? "ring-2 ring-purple-500 border-purple-300"
+                      : "border-slate-200/80"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Menunggu Verifikasi
+                    </span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse"></span>
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <span className="text-3xl font-black text-purple-600">{countVerif}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-purple-50 text-purple-800">
+                      Review Mutu
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setStatusFilter("TERVERIFIKASI")}
+                  className={`p-5 rounded-2xl border bg-white shadow-sm cursor-pointer transition hover:shadow-md ${
+                    statusFilter === "TERVERIFIKASI"
+                      ? "ring-2 ring-emerald-500 border-emerald-300"
+                      : "border-slate-200/80"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Terverifikasi
+                    </span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <span className="text-3xl font-black text-emerald-600">{countSelesai}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-md font-semibold bg-emerald-50 text-emerald-800">
+                      Selesai Valid
+                    </span>
+                  </div>
+                </div>
+              </section>
+
+              {/* Analisis Saluran: Tampil Khusus di Menu Ringkasan & Metrik */}
+              <div className="animate-in fade-in slide-in-from-top-3 duration-200">
+                <SourceComparisonChart
+                  complaints={complaints}
+                  activeFilter={sourceFilter}
+                  onSelectSource={(src) => setSourceFilter(src)}
+                />
+              </div>
             </div>
           )}
 
           {/* ======================================================== */}
-          {/* TABEL MONITORING & PENGELOLAAN KELUHAN */}
+          {/* TAMPILAN 2: MENU DAFTAR KELUHAN (COMPACT & FOKUS)        */}
+          {/* ======================================================== */}
+          {activeMenu === "complaints" && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Daftar Keluhan Pelanggan
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Monitoring dan kelola tiket keluhan operasional secara terpusat.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold px-3 py-1 rounded-xl bg-blue-50 text-blue-900 border border-blue-200">
+                  Total: {complaints.length} Tiket
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TAMPILAN 3: MENU VERIFIKASI MUTU                         */}
+          {/* ======================================================== */}
+          {activeMenu === "verifications" && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Antrean Verifikasi Mutu Layanan
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Tinjau kelengkapan tindakan korektif dan foto bukti lapangan dari PIC.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold px-3 py-1 rounded-xl bg-purple-50 text-purple-900 border border-purple-200">
+                  Menunggu: {countVerif} Tiket
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TABEL MONITORING & PENGELOLAAN KELUHAN                   */}
           {/* ======================================================== */}
           <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
             {/* Table Control Header */}
@@ -929,6 +975,8 @@ export default function DashboardClient({
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">
                   {activeMenu === "verifications"
                     ? "Antrean Verifikasi Mutu Layanan"
+                    : activeMenu === "overview"
+                    ? "Daftar Keluhan Terbaru"
                     : "Monitoring & Penanganan Keluhan Pelanggan"}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
@@ -937,33 +985,20 @@ export default function DashboardClient({
               </div>
 
               <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
-                {/* Ekspor Excel Button */}
-                <button
-                  onClick={() => {
-                    exportComplaintsToExcel(filteredComplaints);
-                    showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
-                  }}
-                  title="Unduh rekapitulasi keluhan yang sedang difilter ke format spreadsheet Excel (.xlsx)"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs active:scale-95"
-                >
-                  <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>Ekspor Excel (.xlsx)</span>
-                </button>
-
-                {/* Admin Chart Toggle Button */}
-                {currentUser.role === Role.ADMIN && (
+                {/* Ekspor Excel Button - Disembunyikan untuk Admin */}
+                {currentUser.role !== Role.ADMIN && (
                   <button
-                    onClick={() => setShowAdminChart(!showAdminChart)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer border ${
-                      showAdminChart
-                        ? "bg-blue-50 text-blue-900 border-blue-200 shadow-2xs"
-                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                    }`}
+                    onClick={() => {
+                      exportComplaintsToExcel(filteredComplaints);
+                      showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
+                    }}
+                    title="Unduh rekapitulasi keluhan yang sedang difilter ke format spreadsheet Excel (.xlsx)"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs active:scale-95"
                   >
-                    <span>📊</span>
-                    <span>{showAdminChart ? "Tutup Analitik Saluran" : "Buka Analisis Saluran"}</span>
+                    <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Ekspor Excel (.xlsx)</span>
                   </button>
                 )}
 
@@ -1126,11 +1161,10 @@ export default function DashboardClient({
                           )}
                         </td>
 
-                        {/* 4. Status & SLA */}
+                        {/* 4. Status */}
                         <td className="px-3 py-3.5">
                           <div className="flex flex-col items-start gap-1">
                             {renderStatusBadge(item.status, item.verifications)}
-                            <div>{renderSlaBadge(item)}</div>
                           </div>
                         </td>
 
@@ -1216,7 +1250,7 @@ export default function DashboardClient({
       {/* ======================================================== */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="max-w-xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
+          <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Header Tetap / Pinned Header */}
             <div className="p-5 sm:p-6 bg-blue-900 text-white flex items-center justify-between shrink-0 shadow-xs">
               <div className="flex items-center gap-3">
@@ -1237,116 +1271,116 @@ export default function DashboardClient({
               </button>
             </div>
 
-            {/* Form dengan Konten Scrollable & Footer Tetap */}
+            {/* Form dengan Konten Vertikal Terbuka & Footer Tetap */}
             <form onSubmit={handleCreateSubmit} className="flex flex-col flex-1 overflow-hidden">
-              <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Nama Personil / Pelapor <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Contoh: Hendra (Divisi Logistik)"
-                      value={newCustomerName}
-                      onChange={(e) => setNewCustomerName(e.target.value)}
-                      className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Kontak Pelapor / WhatsApp <span className="text-slate-400 font-normal">(Opsional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: 0812-3456-7890"
-                      value={newCustomerContact}
-                      onChange={(e) => setNewCustomerContact(e.target.value)}
-                      className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900"
-                    />
-                  </div>
+              <div className="p-6 sm:p-7 space-y-4 overflow-y-auto flex-1">
+                {/* 1. Nama Personil / Pelapor */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Nama Personil / Pelapor <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Hendra (Divisi Logistik / Penumpang KA)"
+                    value={newCustomerName}
+                    onChange={(e) => setNewCustomerName(e.target.value)}
+                    className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white placeholder:text-slate-400"
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Wilayah Operasional / Daop
-                    </label>
-                    <select
-                      value={newDaopOrStation}
-                      onChange={(e) => setNewDaopOrStation(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
-                    >
-                      <option value="Kantor Pusat KAI Bandung">Kantor Pusat KAI Bandung</option>
-                      <option value="Daop 1 Jakarta">Daop 1 Jakarta (Gambir / Pasarsenen)</option>
-                      <option value="Daop 2 Bandung">Daop 2 Bandung</option>
-                      <option value="Daop 3 Cirebon">Daop 3 Cirebon</option>
-                      <option value="Daop 4 Semarang">Daop 4 Semarang</option>
-                      <option value="Daop 5 Purwokerto">Daop 5 Purwokerto</option>
-                      <option value="Daop 6 Yogyakarta">Daop 6 Yogyakarta (Tugu / Lempuyangan)</option>
-                      <option value="Daop 7 Madiun">Daop 7 Madiun</option>
-                      <option value="Daop 8 Surabaya">Daop 8 Surabaya (Gubeng / Pasar Turi)</option>
-                      <option value="Daop 9 Jember">Daop 9 Jember</option>
-                      <option value="Divre I Sumatera Utara">Divre I Sumatera Utara</option>
-                      <option value="Divre II Sumatera Barat">Divre II Sumatera Barat</option>
-                      <option value="Divre III Palembang">Divre III Palembang</option>
-                      <option value="Divre IV Tanjungkarang">Divre IV Tanjungkarang</option>
-                      <option value="Lainnya">Lainnya / Luar Wilayah</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Sumber Keluhan
-                    </label>
-                    <select
-                      value={newSource}
-                      onChange={(e) => setNewSource(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
-                    >
-                      <option value="Telepon">Telepon</option>
-                      <option value="Email">Email</option>
-                      <option value="Laporan Langsung">Laporan Langsung</option>
-                      <option value="Nota Dinas">Nota Dinas</option>
-                      <option value="Helpdesk Internal">Helpdesk Internal</option>
-                      <option value="Survey Pelanggan">Survey Pelanggan</option>
-                    </select>
-                  </div>
+                {/* 2. Kontak Pelapor */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Kontak Pelapor / WhatsApp <span className="text-slate-400 font-normal lowercase">(opsional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: 0812-3456-7890"
+                    value={newCustomerContact}
+                    onChange={(e) => setNewCustomerContact(e.target.value)}
+                    className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white placeholder:text-slate-400"
+                  />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Tanggal Pelaporan
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={newDate}
-                      onChange={(e) => setNewDate(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
-                    />
-                  </div>
+                {/* 3. Wilayah Operasional / Daop */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Wilayah Operasional / Daop
+                  </label>
+                  <select
+                    value={newDaopOrStation}
+                    onChange={(e) => setNewDaopOrStation(e.target.value)}
+                    className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
+                  >
+                    <option value="Kantor Pusat KAI Bandung">Kantor Pusat KAI Bandung</option>
+                    <option value="Daop 1 Jakarta">Daop 1 Jakarta (Gambir / Pasarsenen)</option>
+                    <option value="Daop 2 Bandung">Daop 2 Bandung</option>
+                    <option value="Daop 3 Cirebon">Daop 3 Cirebon</option>
+                    <option value="Daop 4 Semarang">Daop 4 Semarang</option>
+                    <option value="Daop 5 Purwokerto">Daop 5 Purwokerto</option>
+                    <option value="Daop 6 Yogyakarta">Daop 6 Yogyakarta (Tugu / Lempuyangan)</option>
+                    <option value="Daop 7 Madiun">Daop 7 Madiun</option>
+                    <option value="Daop 8 Surabaya">Daop 8 Surabaya (Gubeng / Pasar Turi)</option>
+                    <option value="Daop 9 Jember">Daop 9 Jember</option>
+                    <option value="Divre I Sumatera Utara">Divre I Sumatera Utara</option>
+                    <option value="Divre II Sumatera Barat">Divre II Sumatera Barat</option>
+                    <option value="Divre III Palembang">Divre III Palembang</option>
+                    <option value="Divre IV Tanjungkarang">Divre IV Tanjungkarang</option>
+                    <option value="Lainnya">Lainnya / Luar Wilayah</option>
+                  </select>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Tugaskan Petugas PIC (Opsional)
-                    </label>
-                    <select
-                      value={newPicId}
-                      onChange={(e) => setNewPicId(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 text-slate-900 bg-white"
-                    >
-                      <option value="">-- Pilih PIC Penanggung Jawab --</option>
-                      {picList.map((pic) => (
-                        <option key={pic.id} value={pic.id}>
-                          {pic.name} ({pic.role})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {/* 4. Sumber Keluhan */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Sumber / Saluran Keluhan
+                  </label>
+                  <select
+                    value={newSource}
+                    onChange={(e) => setNewSource(e.target.value)}
+                    className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
+                  >
+                    <option value="Telepon">Telepon</option>
+                    <option value="Email">Email</option>
+                    <option value="Laporan Langsung">Laporan Langsung</option>
+                    <option value="Nota Dinas">Nota Dinas</option>
+                    <option value="Helpdesk Internal">Helpdesk Internal</option>
+                    <option value="Survey Pelanggan">Survey Pelanggan</option>
+                  </select>
+                </div>
+
+                {/* 5. Tanggal Pelaporan */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Tanggal Pelaporan
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
+                  />
+                </div>
+
+                {/* 6. Tugaskan Petugas PIC */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Tugaskan Petugas PIC <span className="text-slate-400 font-normal lowercase">(opsional)</span>
+                  </label>
+                  <select
+                    value={newPicId}
+                    onChange={(e) => setNewPicId(e.target.value)}
+                    className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
+                  >
+                    <option value="">-- Belum Ditugaskan (Pilih Nanti) --</option>
+                    {picList.map((pic) => (
+                      <option key={pic.id} value={pic.id}>
+                        {pic.name} ({pic.role})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -1745,13 +1779,13 @@ export default function DashboardClient({
                         />
                       </div>
 
-                      {/* Unggah Foto Bukti Hasil Perbaikan (Supabase Storage) */}
+                      {/* Unggah Foto Bukti Hasil Perbaikan (Cloudinary) */}
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="text-xs font-semibold text-slate-700">
                             Unggah Foto Bukti Hasil Perbaikan <span className="text-rose-500 font-bold">*</span>
                           </label>
-                          <span className="text-[10px] text-slate-400">Supabase Storage &bull; Maks 5MB</span>
+                          <span className="text-[10px] text-slate-400">Cloudinary &bull; Maks 5MB</span>
                         </div>
 
                         {editProofImageUrl ? (
@@ -1907,7 +1941,7 @@ export default function DashboardClient({
                           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                                Foto Bukti Hasil Perbaikan (Supabase Storage)
+                                Foto Bukti Hasil Perbaikan
                               </span>
                               <a
                                 href={selectedComplaint.proofImageUrl}
@@ -1991,7 +2025,7 @@ export default function DashboardClient({
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                          Foto Bukti Hasil Perbaikan (Supabase Storage)
+                          Foto Bukti Hasil Perbaikan
                         </span>
                         {selectedComplaint.proofImageUrl && (
                           <a
@@ -2051,11 +2085,11 @@ export default function DashboardClient({
 
                   <div>
                     <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Catatan / Alasan (Wajib diisi jika menolak/reject keluhan)
+                      Hasil / Kesimpulan Verifikasi (Wajib diisi ketik manual)
                     </label>
                     <input
                       type="text"
-                      placeholder="Contoh: Solusi belum tuntas diuji / Penjelasan perbaikan diterima..."
+                      placeholder="Ketik kesimpulan hasil penanganan (misal: Sesuai standar, Perbaikan diterima...)"
                       value={verificationFeedback}
                       onChange={(e) => setVerificationFeedback(e.target.value)}
                       className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 text-slate-900"
@@ -2185,9 +2219,6 @@ export default function DashboardClient({
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-slate-500 font-medium">Status:</span>
                   {renderStatusBadge(selectedViewComplaint.status, selectedViewComplaint.verifications)}
-                  <span className="text-xs text-slate-300">|</span>
-                  <span className="text-xs text-slate-500 font-medium">SLA (Target 24 Jam):</span>
-                  {renderSlaBadge(selectedViewComplaint)}
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-slate-500">Saluran:</span>
@@ -2307,7 +2338,7 @@ export default function DashboardClient({
                   <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold text-slate-700">
-                        Foto Bukti Hasil Perbaikan (Supabase Storage):
+                        Foto Bukti Hasil Perbaikan:
                       </span>
                       {selectedViewComplaint.proofImageUrl && (
                         <a

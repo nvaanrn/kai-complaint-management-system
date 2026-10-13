@@ -82,8 +82,8 @@ describe("Unit Test: Role-Based Access Control (RBAC Permissions)", () => {
       expect(Permissions.canVerifyComplaint(picUser1)).toBe(false);
     });
 
-    it("Admin berwenang memverifikasi sebagai supervisor", () => {
-      expect(Permissions.canVerifyComplaint(adminUser)).toBe(true);
+    it("Admin dilarang memverifikasi (four-eyes principle — SOP KAI)", () => {
+      expect(Permissions.canVerifyComplaint(adminUser)).toBe(false);
     });
 
     it("User anonim ditolak verifikasi", () => {

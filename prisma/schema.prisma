@@ -1,12 +1,15 @@
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
 }
+
+// ==============================================================================
+// ENUMS
+// ==============================================================================
 
 enum Role {
   ADMIN
@@ -26,68 +29,219 @@ enum VerificationResult {
   REJECTED
 }
 
+enum ComplaintCategory {
+  KESELAMATAN_KEAMANAN // P0: Keamanan, barang tertinggal, pelecehan
+  FASILITAS_KERETA // P1: AC, toilet, stopkontak, kebersihan kereta
+  FASILITAS_STASIUN // P2: Eskalator, peron, ruang tunggu stasiun
+  TIKET_DAN_SISTEM // P2: Access by KAI, e-boarding pass, loket
+  PELAYANAN_PETUGAS // P3: Sikap/keramahan kondektur, prama/prami, petugas
+  REFUND_DAN_TARIF // P3: Restitusi pembatalan tiket, selisih bea
+  INFORMASI_DAN_LAINNYA // P4: Pertanyaan jadwal, keluhan umum
+}
+
+enum SlaCalendarType {
+  CALENDAR_24_7 // Jam kalender penuh (24 jam x 7 hari)
+  BUSINESS_HOURS // Jam kerja operasional (Senin - Jumat 08.00 - 17.00 WIB)
+}
+
+enum ReopenStatus {
+  PENDING // Menunggu persetujuan Admin
+  APPROVED // Disetujui Admin -> kembali ke DALAM_PENANGANAN
+  REJECTED // Ditolak Admin -> tetap TERVERIFIKASI
+}
+
+enum DocumentStatus {
+  DRAFT // Konsep / Draf dokumen
+  PUBLISHED // Resmi diterbitkan & dikunci sebagai arsip
+  ARCHIVED // Arsip non-aktif
+  SUPERSEDED // Telah digantikan oleh dokumen revisi baru
+}
+
+enum AuditAction {
+  CREATE_COMPLAINT // Registrasi keluhan baru
+  UPDATE_COMPLAINT // Edit data pokok keluhan
+  ASSIGN_PIC // Penugasan / pergantian PIC
+  SAVE_PROGRESS // Simpan draf penanganan PIC
+  SUBMIT_VERIFICATION // Pengajuan hasil penanganan ke verifikator
+  VERIFY_APPROVED // Verifikator menyetujui hasil penanganan
+  VERIFY_REJECTED // Verifikator menolak hasil penanganan
+  REQUEST_REOPEN // Pengajuan permohonan pembukaan kembali
+  APPROVE_REOPEN // Admin menyetujui permohonan pembukaan kembali
+  REJECT_REOPEN // Admin menolak permohonan pembukaan kembali
+  GENERATE_DOCUMENT // Penerbitan dokumen rekapitulasi baru
+  REVISE_DOCUMENT // Penerbitan dokumen versi revisi
+  DELETE_COMPLAINT // Penghapusan keluhan
+}
+
+// ==============================================================================
+// MODELS
+// ==============================================================================
+
 model User {
-  id            String         @id @default(cuid())
-  name          String
-  email         String         @unique
-  password      String
-  role          Role           @default(PIC)
-  assignedTasks Complaint[]    @relation("PicComplaints")
-  verifications Verification[]
-  documents     Document[]     @relation("DocCreator")
-  createdAt     DateTime       @default(now())
+  id              String          @id @default(uuid())
+  name            String
+  email           String          @unique
+  password        String
+  role            Role            @default(PIC)
+  assignedTasks   Complaint[]     @relation("PicComplaints")
+  verifications   Verification[]  @relation("VerifierRecords")
+  documents       Document[]      @relation("DocCreator")
+  reopenRequests  ReopenRequest[] @relation("ReopenRequester")
+  reviewedReopens ReopenRequest[] @relation("ReopenReviewer")
+  auditLogs       AuditLog[]      @relation("UserAuditLogs")
+  createdAt       DateTime        @default(now())
+
+  @@index([role])
+}
+
+model SlaPolicy {
+  id           String            @id @default(uuid())
+  category     ComplaintCategory @unique
+  name         String
+  targetHours  Int // Target durasi dalam satuan jam
+  calendarType SlaCalendarType   @default(CALENDAR_24_7)
+  description  String?           @db.Text
+  isActive     Boolean           @default(true)
+  complaints   Complaint[]       @relation("PolicyComplaints")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([category])
+  @@index([isActive])
 }
 
 model Complaint {
-  id               String          @id @default(cuid())
-  complaintNumber  String          @unique // Contoh: CMP-2026-001
-  date             DateTime        // Tanggal pelaporan keluhan
-  customerName     String          // Nama personil / pengguna layanan
-  customerContact  String?         // Nomor kontak / WhatsApp pelapor
-  daopOrStation    String?         // Stasiun / Wilayah Daop operasional KAI
-  source           String          // Telepon, survey, email, laporan langsung, dll.
-  description      String          @db.Text
-  status           ComplaintStatus @default(BELUM_DITANGANI)
+  id              String             @id @default(uuid())
+  complaintNumber String             @unique // Contoh: CMP-2026-001
+  date            DateTime // Tanggal kejadian / pelaporan keluhan oleh penumpang
+  customerName    String // Nama personil / pengguna layanan
+  customerContact String? // Nomor kontak / WhatsApp pelapor
+  daopOrStation   String? // Stasiun / Wilayah Daop operasional KAI
+  source          String // Telepon, survey, email, Access by KAI, dll.
+  category        ComplaintCategory? // Klasifikasi jenis keluhan
+  description     String             @db.Text
+  status          ComplaintStatus    @default(BELUM_DITANGANI)
 
   // Penugasan PIC & Audit Waktu
-  picId            String?
-  pic              User?           @relation("PicComplaints", fields: [picId], references: [id])
-  submittedAt      DateTime?       // Waktu pengajuan verifikasi oleh PIC (audit SLA)
+  picId           String?
+  pic             User?     @relation("PicComplaints", fields: [picId], references: [id], onDelete: SetNull)
+  assignedAt      DateTime? // Waktu PIC ditugaskan (audit SLA respons penugasan)
+  submittedAt     DateTime? // Waktu pengajuan verifikasi oleh PIC (audit SLA eksekusi)
+  completedAt     DateTime? // Waktu resmi disetujui verifikator (audit SLA total selesai)
+  submissionCount Int       @default(0) // Jumlah siklus PIC submit penanganan
 
-  // Tindakan Penanganan
-  correctiveAction String?         @db.Text // Tindakan perbaikan
-  preventiveAction String?         @db.Text // Tindakan pencegahan
-  proofImageUrl    String?         @db.Text // URL foto bukti perbaikan di lapangan (Supabase Storage)
-  notes            String?         @db.Text // Keterangan
+  // Snapshot Kebijakan SLA (Terkunci permanen saat tiket dibuat)
+  slaTargetHours  Int? // Snapshot target jam SLA saat tiket diregistrasi
+  slaCalendarType SlaCalendarType? @default(CALENDAR_24_7) // Snapshot kalender SLA
+  slaPolicyId     String?
+  slaPolicy       SlaPolicy?       @relation("PolicyComplaints", fields: [slaPolicyId], references: [id], onDelete: SetNull)
 
-  // Relasi
-  verifications    Verification[]
-  documentId       String?
-  document         Document?       @relation(fields: [documentId], references: [id])
+  // Tindakan Penanganan Lapangan
+  correctiveAction String? @db.Text // Tindakan perbaikan
+  preventiveAction String? @db.Text // Tindakan pencegahan
+  proofImageUrl    String? @db.Text // URL foto bukti perbaikan di lapangan (Cloudinary)
+  notes            String? @db.Text // Keterangan
 
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  // Relasi & Jejak Audit
+  verifications  Verification[]  @relation("ComplaintVerifications")
+  reopenRequests ReopenRequest[] @relation("ComplaintReopens")
+  auditLogs      AuditLog[]      @relation("ComplaintAuditLogs")
+  documentId     String?
+  document       Document?       @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([category])
+  @@index([status, picId])
 }
 
 model Verification {
-  id          String             @id @default(cuid())
+  id          String             @id @default(uuid())
   complaintId String
-  complaint   Complaint          @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  complaint   Complaint          @relation("ComplaintVerifications", fields: [complaintId], references: [id], onDelete: Cascade)
   verifierId  String
-  verifier    User               @relation(fields: [verifierId], references: [id])
+  verifier    User               @relation("VerifierRecords", fields: [verifierId], references: [id], onDelete: Restrict)
   result      VerificationResult
-  feedback    String?            @db.Text // Catatan jika ditolak / disetujui
+  feedback    String?            @db.Text // Kesimpulan verifikasi atau alasan penolakan
+  cycle       Int                @default(1) // Nomor putaran siklus pengajuan & verifikasi
   verifiedAt  DateTime           @default(now())
+
+  @@index([complaintId, verifiedAt])
+}
+
+model ReopenRequest {
+  id            String       @id @default(uuid())
+  complaintId   String
+  complaint     Complaint    @relation("ComplaintReopens", fields: [complaintId], references: [id], onDelete: Restrict)
+  requestedById String
+  requester     User         @relation("ReopenRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  reason        String       @db.Text // Alasan pembukaan kembali keluhan
+  status        ReopenStatus @default(PENDING)
+  reviewedById  String?
+  reviewer      User?        @relation("ReopenReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  adminNotes    String?      @db.Text // Alasan / catatan keputusan persetujuan atau penolakan oleh Admin
+  requestedAt   DateTime     @default(now())
+  reviewedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([complaintId])
+  @@index([status])
+  @@index([requestedAt])
 }
 
 model Document {
-  id             String      @id @default(cuid())
-  documentNumber String      // FR.SM/TI/033.001/10-2020
-  version        String      // 002-2020
-  documentDate   DateTime
-  createdById    String
-  createdBy      User        @relation("DocCreator", fields: [createdById], references: [id])
-  managementRep  String      // Nama Management Representative
-  complaints     Complaint[]
-  createdAt      DateTime    @default(now())
+  id               String         @id @default(uuid())
+  documentNumber   String @unique // Format: FR.SM/TI/033.001/10-2020
+  version          String         @default("002-2020")
+  revisionNumber   Int            @default(0) // 0 = Dokumen Master Pertama, 1 = Revisi ke-1, dst
+  parentDocumentId String?
+  parentDocument   Document?      @relation("DocumentRevisions", fields: [parentDocumentId], references: [id], onDelete: Restrict)
+  revisions        Document[]     @relation("DocumentRevisions")
+  revisionReason   String?        @db.Text // Alasan penerbitan revisi jika merevisi dokumen lama
+  status           DocumentStatus @default(PUBLISHED)
+  documentDate     DateTime // Tanggal penetapan dokumen
+  publishedAt      DateTime?      @default(now()) // Waktu penerbitan resmi
+  createdById      String
+  createdBy        User           @relation("DocCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  managementRep    String // Nama Management Representative KAI
+  complaints       Complaint[] // Relasi aktif keluhan yang termasuk
+  snapshotData     Json? // IMMUTABLE SNAPSHOT: Salinan beku seluruh keluhan saat dokumen terbit
+  totalComplaints  Int            @default(0) // Total baris keluhan dalam dokumen
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+
+  @@index([documentNumber])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  complaintId String?
+  complaint   Complaint?  @relation("ComplaintAuditLogs", fields: [complaintId], references: [id], onDelete: SetNull)
+  userId      String?
+  user        User?       @relation("UserAuditLogs", fields: [userId], references: [id], onDelete: SetNull)
+  action      AuditAction
+  entity      String      @default("Complaint")
+  entityId    String
+  details     Json? // Metadata perubahan (sebelum vs sesudah) - DILARANG menyimpan password/token
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  @@index([complaintId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
+
+// Counter atomik untuk nomor keluhan yang aman terhadap konkurensi
+model ComplaintCounter {
+  id           String   @id @default(uuid())
+  year         Int      @unique // Tahun berjalan, di-reset setiap tahun
+  lastSequence Int      @default(0) // Nomor urut terakhir yang digunakan
+  updatedAt    DateTime @updatedAt
 }
