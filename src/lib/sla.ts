@@ -18,7 +18,7 @@ export interface SlaCalculationOptions {
   /** Waktu verifikator menyetujui (waktu selesai resmi) */
   completedAt?: string | Date | null;
   /** Target jam SLA dari snapshot keluhan (per kategori) */
-  targetHours?: number;
+  targetHours?: number | null;
   /** Override waktu sekarang untuk keperluan unit test */
   now?: number;
 }
