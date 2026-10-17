@@ -1,6 +1,5 @@
 import React from "react";
 import { ComplaintData } from "@/types/database";
-import { calculateSla } from "@/lib/sla";
 import SourceComparisonChart from "@/components/SourceComparisonChart";
 
 interface AdminOverviewProps {
@@ -10,8 +9,7 @@ interface AdminOverviewProps {
   onSelectStatusFilter: (status: string) => void;
   onSelectSourceFilter: (source: string) => void;
   onFilterUnassigned: () => void;
-  onFilterSlaRisk: () => void;
-  activeSpecialFilter?: "unassigned" | "sla_risk" | null;
+  activeSpecialFilter?: "unassigned" | null;
 }
 
 export default function AdminOverview({
@@ -21,7 +19,6 @@ export default function AdminOverview({
   onSelectStatusFilter,
   onSelectSourceFilter,
   onFilterUnassigned,
-  onFilterSlaRisk,
   activeSpecialFilter,
 }: AdminOverviewProps) {
   // Hitung metrik status
@@ -35,50 +32,16 @@ export default function AdminOverview({
     (c) => !c.pic && c.status !== "TERVERIFIKASI"
   ).length;
 
-  // Hitung tiket yang berisiko SLA (Overdue atau mendekati batas)
-  const slaRiskCount = complaints.filter((c) => {
-    if (c.status === "TERVERIFIKASI") return false;
-    const sla = calculateSla({
-      date: c.date,
-      status: c.status,
-      submittedAt: c.submittedAt,
-      completedAt: c.completedAt,
-      targetHours: c.slaTargetHours,
-    });
-    return sla.isOverdue || sla.isNearDeadline;
-  }).length;
-
-  // Kepatuhan SLA untuk keluhan terverifikasi
-  const verifiedComplaints = complaints.filter((c) => c.status === "TERVERIFIKASI");
-  const metSlaCount = verifiedComplaints.filter((c) => {
-    const sla = calculateSla({
-      date: c.date,
-      status: c.status,
-      submittedAt: c.submittedAt,
-      completedAt: c.completedAt,
-      targetHours: c.slaTargetHours,
-    });
-    return sla.isMet;
-  }).length;
-
-  const slaComplianceRate =
-    verifiedComplaints.length > 0
-      ? Math.round((metSlaCount / verifiedComplaints.length) * 100)
-      : 100;
-
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Kartu Peringatan Operasional Admin (Unassigned & SLA Risk) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Unassigned Warning Card */}
+      {/* Kartu Peringatan Operasional Admin (Unassigned PIC) */}
+      {unassignedCount > 0 && (
         <div
           onClick={onFilterUnassigned}
           className={`p-4 rounded-2xl border transition cursor-pointer flex items-center justify-between gap-4 ${
             activeSpecialFilter === "unassigned"
               ? "bg-amber-100/70 border-amber-400 ring-2 ring-amber-500 shadow-sm"
-              : unassignedCount > 0
-              ? "bg-amber-50/70 border-amber-200 hover:bg-amber-100/50"
-              : "bg-slate-50 border-slate-200/80"
+              : "bg-amber-50/70 border-amber-200 hover:bg-amber-100/50"
           }`}
         >
           <div className="flex items-center gap-3">
@@ -89,10 +52,8 @@ export default function AdminOverview({
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                 Keluhan Belum Ditugaskan
               </h4>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {unassignedCount > 0
-                  ? "Segera tunjuk PIC penanggung jawab agar SLA penanganan tidak terlewat."
-                  : "Seluruh tiket aktif telah memiliki PIC penanggung jawab."}
+              <p className="text-xs text-slate-600 mt-0.5">
+                Terdapat {unassignedCount} keluhan yang belum memiliki petugas PIC penanggung jawab. Segera tentukan PIC untuk memproses penanganan.
               </p>
             </div>
           </div>
@@ -101,39 +62,7 @@ export default function AdminOverview({
             <span className="block text-[10px] text-amber-800 font-semibold">Tiket</span>
           </div>
         </div>
-
-        {/* SLA Risk Warning Card */}
-        <div
-          onClick={onFilterSlaRisk}
-          className={`p-4 rounded-2xl border transition cursor-pointer flex items-center justify-between gap-4 ${
-            activeSpecialFilter === "sla_risk"
-              ? "bg-rose-100/70 border-rose-400 ring-2 ring-rose-500 shadow-sm"
-              : slaRiskCount > 0
-              ? "bg-rose-50/70 border-rose-200 hover:bg-rose-100/50"
-              : "bg-slate-50 border-slate-200/80"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold text-lg shrink-0">
-              🚨
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Mendekati / Melewati SLA
-              </h4>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {slaRiskCount > 0
-                  ? "Tiket berisiko teguran operasional atau komplain berulang dari pelanggan."
-                  : "Target SLA seluruh tiket operasional terpantau aman."}
-              </p>
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <span className="text-2xl font-black text-rose-700">{slaRiskCount}</span>
-            <span className="block text-[10px] text-rose-800 font-semibold">Tiket</span>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* KPI Stat Cards Utama */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
@@ -223,8 +152,8 @@ export default function AdminOverview({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl sm:text-3xl font-black text-emerald-600">{countSelesai}</span>
-            <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md font-semibold bg-emerald-50 text-emerald-800" title="Tingkat kepatuhan waktu penanganan">
-              SLA {slaComplianceRate}%
+            <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md font-semibold bg-emerald-50 text-emerald-800">
+              Selesai Valid
             </span>
           </div>
         </div>

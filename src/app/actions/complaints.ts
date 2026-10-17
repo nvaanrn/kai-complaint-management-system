@@ -106,24 +106,7 @@ export async function createComplaint(formData: {
         initialStatus = ComplaintStatus.DALAM_PENANGANAN;
       }
 
-      // 3. Snapshot SLA berdasarkan kategori keluhan (atau default 24 Jam)
-      let slaTargetHours = 24;
-      let slaCalendarType: any = "CALENDAR_24_7";
-      let slaPolicyId: string | null = null;
-
-      if (formData.category) {
-        const policy = await tx.slaPolicy.findUnique({
-          where: { category: formData.category as ComplaintCategory },
-        });
-
-        if (policy) {
-          slaTargetHours = policy.targetHours;
-          slaCalendarType = policy.calendarType;
-          slaPolicyId = policy.id;
-        }
-      }
-
-      // 4. Buat baris keluhan baru
+      // 3. Buat baris keluhan baru
       const newComplaint = await tx.complaint.create({
         data: {
           complaintNumber,
@@ -137,9 +120,6 @@ export async function createComplaint(formData: {
           status: initialStatus,
           picId: assignedPicId,
           assignedAt,
-          slaTargetHours,
-          slaCalendarType,
-          slaPolicyId,
         },
       });
 
@@ -846,6 +826,73 @@ export async function createDocumentBatch(data: {
     return {
       success: false,
       error: error.message || "Gagal menerbitkan dokumen rekapitulasi.",
+      code: "INTERNAL_ERROR",
+    };
+  }
+}
+
+// 8b. Server Action: Ambil Dokumen Resmi Terbit Berdasarkan Nomor Dokumen
+export async function getPublishedDocument(documentNumber: string): Promise<ActionResponse> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { success: false, error: "Sesi tidak valid.", code: "UNAUTHENTICATED" };
+  }
+
+  try {
+    const doc = await prisma.document.findFirst({
+      where: { documentNumber: documentNumber.trim() },
+      orderBy: { revisionNumber: "desc" },
+      include: {
+        createdBy: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
+    });
+
+    if (!doc) {
+      return { success: false, error: "Dokumen tidak ditemukan.", code: "NOT_FOUND" };
+    }
+
+    return {
+      success: true,
+      data: doc,
+    };
+  } catch (error: any) {
+    console.error("Error fetching published document:", error);
+    return {
+      success: false,
+      error: error.message || "Gagal mengambil data dokumen arsip.",
+      code: "INTERNAL_ERROR",
+    };
+  }
+}
+
+// 8c. Server Action: Ambil Daftar Seluruh Dokumen Terbit
+export async function getPublishedDocumentsList(): Promise<ActionResponse> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { success: false, error: "Sesi tidak valid.", code: "UNAUTHENTICATED" };
+  }
+
+  try {
+    const docs = await prisma.document.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        createdBy: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
+    });
+
+    return {
+      success: true,
+      data: docs,
+    };
+  } catch (error: any) {
+    console.error("Error fetching documents list:", error);
+    return {
+      success: false,
+      error: error.message || "Gagal mengambil daftar dokumen.",
       code: "INTERNAL_ERROR",
     };
   }

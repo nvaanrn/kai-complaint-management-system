@@ -318,15 +318,18 @@ export function KaiDocumentPdf({
             </View>
             <View style={styles.metaRowLast}>
               <Text style={styles.metaLabel}>Halaman</Text>
-              <Text style={styles.metaValue}>: 1 dari 1</Text>
+              <Text
+                style={styles.metaValue}
+                render={({ pageNumber, totalPages }) => `: ${pageNumber} dari ${totalPages}`}
+              />
             </View>
           </View>
         </View>
 
         {/* 2. TABEL REKAPITULASI RESMI */}
         <View style={styles.table}>
-          {/* Header Baris 1 & 2 (Merged) */}
-          <View style={styles.tableHeaderGroup}>
+          {/* Header Baris 1 & 2 (Merged) - fixed agar berulang di setiap halaman */}
+          <View style={styles.tableHeaderGroup} fixed>
             <View style={[styles.th, { width: colWidths.no }]}><Text>No</Text></View>
             <View style={[styles.th, { width: colWidths.tanggal }]}><Text>Tanggal</Text></View>
             <View style={[styles.th, { width: colWidths.pelanggan }]}><Text>Pelanggan</Text></View>

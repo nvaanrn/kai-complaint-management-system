@@ -1,10 +1,13 @@
 # Spesifikasi Aturan Perhitungan Service Level Agreement (SLA)
 **PT Kereta Api Indonesia (Persero)**
 
-> **Versi Dokumen:** 1.0.0-Fase2  
-> **Status:** Draft Arsitektur & Analisis Bisnis  
-> **Tanggal:** 2026-10-10  
-> **Dasar Kebijakan:** Keputusan Bisnis #1 (Target SLA Berbeda Sesuai Jenis Keluhan)
+> **Versi Dokumen:** 1.0.0-Fase2 (DIARSIPKAN / OBSOLETE)  
+> **Status:** FITUR DIHAPUS MENYELURUH PADA FASE 1  
+> **Dasar Keputusan:** Keputusan Final Manajemen — Sistem tidak lagi menggunakan SLA untuk mengukur target waktu, keterlambatan, prioritas, atau kepatuhan.
+
+> [!WARNING]
+> **FITUR SLA TELAH DIHAPUS SECARA MENYELURUH (FASE 1)**  
+> Fitur Service Level Agreement (SLA) beserta seluruh model database, komponen UI, metrik overview, badge, filter, dan utility perhitungannya telah dihapus dari aplikasi SPKP. Seluruh alur bisnis keluhan (penugasan PIC, tindakan perbaikan, verifikasi independen dua tahap, pembukaan kembali, audit log, dan dokumen arsip FR.SM/TI/033.001) tetap berjalan normal tanpa pembatasan durasi SLA. Dokumen ini dipertahankan murni sebagai arsip historis.
 
 ---
 

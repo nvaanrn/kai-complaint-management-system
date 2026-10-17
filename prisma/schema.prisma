@@ -39,11 +39,6 @@ enum ComplaintCategory {
   INFORMASI_DAN_LAINNYA // P4: Pertanyaan jadwal, keluhan umum
 }
 
-enum SlaCalendarType {
-  CALENDAR_24_7 // Jam kalender penuh (24 jam x 7 hari)
-  BUSINESS_HOURS // Jam kerja operasional (Senin - Jumat 08.00 - 17.00 WIB)
-}
-
 enum ReopenStatus {
   PENDING // Menunggu persetujuan Admin
   APPROVED // Disetujui Admin -> kembali ke DALAM_PENANGANAN
@@ -94,22 +89,6 @@ model User {
   @@index([role])
 }
 
-model SlaPolicy {
-  id           String            @id @default(uuid())
-  category     ComplaintCategory @unique
-  name         String
-  targetHours  Int // Target durasi dalam satuan jam
-  calendarType SlaCalendarType   @default(CALENDAR_24_7)
-  description  String?           @db.Text
-  isActive     Boolean           @default(true)
-  complaints   Complaint[]       @relation("PolicyComplaints")
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-
-  @@index([category])
-  @@index([isActive])
-}
-
 model Complaint {
   id              String             @id @default(uuid())
   complaintNumber String             @unique // Contoh: CMP-2026-001
@@ -122,19 +101,13 @@ model Complaint {
   description     String             @db.Text
   status          ComplaintStatus    @default(BELUM_DITANGANI)
 
-  // Penugasan PIC & Audit Waktu
+  // Penugasan PIC & Audit Waktu Operasional
   picId           String?
   pic             User?     @relation("PicComplaints", fields: [picId], references: [id], onDelete: SetNull)
-  assignedAt      DateTime? // Waktu PIC ditugaskan (audit SLA respons penugasan)
-  submittedAt     DateTime? // Waktu pengajuan verifikasi oleh PIC (audit SLA eksekusi)
-  completedAt     DateTime? // Waktu resmi disetujui verifikator (audit SLA total selesai)
+  assignedAt      DateTime? // Waktu PIC ditugaskan
+  submittedAt     DateTime? // Waktu pengajuan verifikasi oleh PIC
+  completedAt     DateTime? // Waktu resmi disetujui verifikator
   submissionCount Int       @default(0) // Jumlah siklus PIC submit penanganan
-
-  // Snapshot Kebijakan SLA (Terkunci permanen saat tiket dibuat)
-  slaTargetHours  Int? // Snapshot target jam SLA saat tiket diregistrasi
-  slaCalendarType SlaCalendarType? @default(CALENDAR_24_7) // Snapshot kalender SLA
-  slaPolicyId     String?
-  slaPolicy       SlaPolicy?       @relation("PolicyComplaints", fields: [slaPolicyId], references: [id], onDelete: SetNull)
 
   // Tindakan Penanganan Lapangan
   correctiveAction String? @db.Text // Tindakan perbaikan
@@ -195,7 +168,7 @@ model ReopenRequest {
 
 model Document {
   id               String         @id @default(uuid())
-  documentNumber   String @unique // Format: FR.SM/TI/033.001/10-2020
+  documentNumber   String // Format: FR.SM/TI/033.001/10-2020
   version          String         @default("002-2020")
   revisionNumber   Int            @default(0) // 0 = Dokumen Master Pertama, 1 = Revisi ke-1, dst
   parentDocumentId String?

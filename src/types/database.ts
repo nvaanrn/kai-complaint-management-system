@@ -31,11 +31,6 @@ export enum ComplaintCategory {
   INFORMASI_DAN_LAINNYA = "INFORMASI_DAN_LAINNYA",
 }
 
-export enum SlaCalendarType {
-  CALENDAR_24_7 = "CALENDAR_24_7",
-  BUSINESS_HOURS = "BUSINESS_HOURS",
-}
-
 export enum ReopenStatus {
   PENDING = "PENDING",
   APPROVED = "APPROVED",
@@ -100,16 +95,6 @@ export interface ReopenRequestData {
   reviewer?: UserSummary | null;
 }
 
-export interface SlaPolicyData {
-  id: string;
-  category: ComplaintCategory;
-  name: string;
-  targetHours: number;
-  calendarType: SlaCalendarType;
-  description?: string | null;
-  isActive: boolean;
-}
-
 export interface ComplaintData {
   id: string;
   complaintNumber: string;
@@ -131,9 +116,6 @@ export interface ComplaintData {
   submittedAt?: Date | string | null;
   completedAt?: Date | string | null;
   submissionCount?: number;
-  slaTargetHours?: number | null;
-  slaCalendarType?: SlaCalendarType | null;
-  slaPolicyId?: string | null;
   verifications?: VerificationData[];
   reopenRequests?: ReopenRequestData[];
   createdAt: Date | string;

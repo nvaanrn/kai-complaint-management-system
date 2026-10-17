@@ -51,69 +51,7 @@ async function main() {
   console.log(`   - Verifikator : ${verifikator.email}`);
   console.log('   (Password untuk semua akun: password123)\n');
 
-  // 4. Buat Kebijakan SLA Master (SlaPolicy)
-  const slaPolicies = [
-    {
-      category: 'KESELAMATAN_KEAMANAN' as const,
-      name: 'Keselamatan & Keamanan (P0)',
-      targetHours: 6,
-      calendarType: 'CALENDAR_24_7' as const,
-      description: 'Penanganan insiden darurat, keselamatan penumpang, barang tertinggal, pelecehan',
-    },
-    {
-      category: 'FASILITAS_KERETA' as const,
-      name: 'Fasilitas di Atas Kereta (P1)',
-      targetHours: 12,
-      calendarType: 'CALENDAR_24_7' as const,
-      description: 'Kerusakan fasilitas vital selama perjalanan (AC, toilet, stopkontak, kebersihan)',
-    },
-    {
-      category: 'FASILITAS_STASIUN' as const,
-      name: 'Fasilitas Stasiun & Peron (P2)',
-      targetHours: 24,
-      calendarType: 'CALENDAR_24_7' as const,
-      description: 'Fasilitas penumpang di area stasiun (eskalator, lift, ruang tunggu, loket)',
-    },
-    {
-      category: 'TIKET_DAN_SISTEM' as const,
-      name: 'Layanan Tiket & Sistem TI (P2)',
-      targetHours: 24,
-      calendarType: 'CALENDAR_24_7' as const,
-      description: 'Aplikasi Access by KAI, boarding pass, pembayaran tiket, sistem informasi',
-    },
-    {
-      category: 'PELAYANAN_PETUGAS' as const,
-      name: 'Pelayanan & Sikap Petugas (P3)',
-      targetHours: 48,
-      calendarType: 'BUSINESS_HOURS' as const,
-      description: 'Evaluasi perilaku, keramahan petugas loket, kondektur, prama/prami',
-    },
-    {
-      category: 'REFUND_DAN_TARIF' as const,
-      name: 'Refund & Bea Finansial (P3)',
-      targetHours: 72,
-      calendarType: 'BUSINESS_HOURS' as const,
-      description: 'Klaim pengembalian bea pembatalan tiket, selisih tarif',
-    },
-    {
-      category: 'INFORMASI_DAN_LAINNYA' as const,
-      name: 'Informasi Umum & Saran (P4)',
-      targetHours: 72,
-      calendarType: 'BUSINESS_HOURS' as const,
-      description: 'Pertanyaan jadwal perjalanan baru, saran perbaikan layanan umum',
-    },
-  ];
-
-  for (const policy of slaPolicies) {
-    await prisma.slaPolicy.upsert({
-      where: { category: policy.category },
-      update: {},
-      create: policy,
-    });
-  }
-  console.log(`✅ ${slaPolicies.length} Master Kebijakan SLA berhasil di-seed.\n`);
-
-  // 5. Buat Sample Data Keluhan (Complaints)
+  // 4. Buat Sample Data Keluhan (Complaints)
   const complaints = [
     {
       complaintNumber: 'CMP-2026-001',

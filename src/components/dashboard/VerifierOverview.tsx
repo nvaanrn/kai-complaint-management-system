@@ -1,13 +1,10 @@
 import React from "react";
 import { ComplaintData, VerificationResult } from "@/types/database";
-import { calculateSla } from "@/lib/sla";
 
 interface VerifierOverviewProps {
   complaints: ComplaintData[];
   onSelectPendingVerification: () => void;
   onSelectApproved: () => void;
-  onFilterUrgentReview: () => void;
-  activeSpecialFilter?: "urgent_review" | null;
   statusFilter: string;
 }
 
@@ -15,24 +12,11 @@ export default function VerifierOverview({
   complaints,
   onSelectPendingVerification,
   onSelectApproved,
-  onFilterUrgentReview,
-  activeSpecialFilter,
   statusFilter,
 }: VerifierOverviewProps) {
   const pendingComplaints = complaints.filter((c) => c.status === "MENUNGGU_VERIFIKASI");
+  const inProgressComplaints = complaints.filter((c) => c.status === "DALAM_PENANGANAN");
   const approvedComplaints = complaints.filter((c) => c.status === "TERVERIFIKASI");
-
-  // Keluhan dalam antrean verifikasi yang mendekati / melewati SLA
-  const urgentReview = pendingComplaints.filter((c) => {
-    const sla = calculateSla({
-      date: c.date,
-      status: c.status,
-      submittedAt: c.submittedAt,
-      completedAt: c.completedAt,
-      targetHours: c.slaTargetHours,
-    });
-    return sla.isOverdue || sla.isNearDeadline;
-  });
 
   // Total riwayat verifikasi yang pernah ditolak di seluruh keluhan
   const totalRejectedVerifications = complaints.reduce((acc, c) => {
@@ -44,39 +28,13 @@ export default function VerifierOverview({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Alert Urgensi Jika Ada Antrean Mendekati / Lewat Batas Waktu */}
-      {urgentReview.length > 0 && (
-        <div
-          onClick={onFilterUrgentReview}
-          className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 shadow-sm cursor-pointer hover:bg-amber-100/60 transition flex items-center justify-between gap-4"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl animate-pulse">⏱️</span>
-            <div>
-              <h4 className="text-xs font-bold text-amber-950 uppercase tracking-wider">
-                Ada {urgentReview.length} Keluhan Menunggu Review Mendekati / Melewati SLA
-              </h4>
-              <p className="text-xs text-amber-800 mt-0.5">
-                PIC telah menyelesaikan perbaikan lapangan. Segera lakukan validasi dokumen dan foto bukti agar penyelesaian resmi tercatat tepat waktu.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="px-3.5 py-1.5 text-xs font-bold bg-amber-700 text-white rounded-xl shadow-xs hover:bg-amber-800 shrink-0"
-          >
-            Tinjau Segera
-          </button>
-        </div>
-      )}
-
       {/* KPI Cards Verifikator */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {/* Antrean Menunggu Verifikasi */}
         <div
           onClick={onSelectPendingVerification}
           className={`p-4 sm:p-5 rounded-2xl border bg-white shadow-2xs cursor-pointer transition hover:shadow-md ${
-            statusFilter === "MENUNGGU_VERIFIKASI" && !activeSpecialFilter
+            statusFilter === "MENUNGGU_VERIFIKASI"
               ? "ring-2 ring-purple-600 border-purple-400"
               : "border-slate-200/80"
           }`}
@@ -97,27 +55,20 @@ export default function VerifierOverview({
           </div>
         </div>
 
-        {/* Antrean Kritis / Risiko SLA */}
-        <div
-          onClick={onFilterUrgentReview}
-          className={`p-4 sm:p-5 rounded-2xl border bg-white shadow-2xs cursor-pointer transition hover:shadow-md ${
-            activeSpecialFilter === "urgent_review"
-              ? "ring-2 ring-rose-500 border-rose-300"
-              : "border-slate-200/80"
-          }`}
-        >
+        {/* Proses Lapangan PIC */}
+        <div className="p-4 sm:p-5 rounded-2xl border bg-white shadow-2xs border-slate-200/80">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Review Kritis SLA
+              Proses Lapangan
             </span>
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
           </div>
           <div className="mt-3 flex items-baseline justify-between">
-            <span className="text-2xl sm:text-3xl font-black text-rose-600">
-              {urgentReview.length}
+            <span className="text-2xl sm:text-3xl font-black text-sky-600">
+              {inProgressComplaints.length}
             </span>
-            <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md font-semibold bg-rose-50 text-rose-800">
-              Prioritas Review
+            <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md font-semibold bg-sky-50 text-sky-800">
+              Tindakan PIC
             </span>
           </div>
         </div>
@@ -126,7 +77,7 @@ export default function VerifierOverview({
         <div
           onClick={onSelectApproved}
           className={`p-4 sm:p-5 rounded-2xl border bg-white shadow-2xs cursor-pointer transition hover:shadow-md ${
-            statusFilter === "TERVERIFIKASI" && !activeSpecialFilter
+            statusFilter === "TERVERIFIKASI"
               ? "ring-2 ring-emerald-500 border-emerald-300"
               : "border-slate-200/80"
           }`}

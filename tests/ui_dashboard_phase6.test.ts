@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { calculateSla } from "@/lib/sla";
 import { ComplaintStatus, Role, VerificationResult } from "@/types/database";
 
 describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
@@ -18,10 +17,9 @@ describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
       customerContact: "08123456789",
       daopOrStation: "Daop 1 Jakarta",
       source: "Telepon",
-      date: new Date(Date.now() - 30 * 3600 * 1000).toISOString(), // 30 hours ago (Overdue if target 24h)
+      date: new Date(Date.now() - 30 * 3600 * 1000).toISOString(),
       description: "AC di gerbong 3 rusak dan bocor",
       status: ComplaintStatus.BELUM_DITANGANI,
-      slaTargetHours: 24,
       pic: null, // Unassigned
       verifications: [],
     },
@@ -32,10 +30,9 @@ describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
       customerContact: "08198765432",
       daopOrStation: "Daop 2 Bandung",
       source: "Email",
-      date: new Date(Date.now() - 20 * 3600 * 1000).toISOString(), // 20 hours ago (Near deadline: remaining 4h)
+      date: new Date(Date.now() - 20 * 3600 * 1000).toISOString(),
       description: "Keterlambatan pembagian kompensasi",
       status: ComplaintStatus.DALAM_PENANGANAN,
-      slaTargetHours: 24,
       pic: mockPicUser, // Assigned to PIC
       verifications: [
         {
@@ -58,7 +55,6 @@ describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
       submittedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
       description: "Pintu otomatis macet",
       status: ComplaintStatus.MENUNGGU_VERIFIKASI,
-      slaTargetHours: 24,
       pic: mockPicUser,
       verifications: [],
     },
@@ -74,7 +70,6 @@ describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
       completedAt: new Date(Date.now() - 30 * 3600 * 1000).toISOString(),
       description: "Gangguan sinyal wifi stasiun",
       status: ComplaintStatus.TERVERIFIKASI,
-      slaTargetHours: 24,
       pic: mockPicUser,
       verifications: [
         {
@@ -95,25 +90,6 @@ describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
       );
       expect(unassigned.length).toBe(1);
       expect(unassigned[0].id).toBe("c-1");
-    });
-
-    it("Admin Overview: detects SLA risk tickets (Overdue or Near Deadline)", () => {
-      const slaRisks = mockComplaints.filter((c) => {
-        if (c.status === ComplaintStatus.TERVERIFIKASI) return false;
-        const sla = calculateSla({
-          date: c.date,
-          status: c.status,
-          submittedAt: c.submittedAt,
-          completedAt: c.completedAt,
-          targetHours: c.slaTargetHours,
-        });
-        return sla.isOverdue || sla.isNearDeadline;
-      });
-
-      // c-1 is overdue (30h > 24h), c-2 is near deadline (20h out of 24h)
-      expect(slaRisks.length).toBe(2);
-      expect(slaRisks.map((c) => c.id)).toContain("c-1");
-      expect(slaRisks.map((c) => c.id)).toContain("c-2");
     });
 
     it("PIC Overview: filters tasks assigned to currentUser and detects revision status", () => {
@@ -142,29 +118,48 @@ describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
     });
   });
 
-  describe("2. Table Filters & Pagination Logic", () => {
-    it("filters by status accurately", () => {
-      const filterBelum = mockComplaints.filter(
-        (c) => c.status === ComplaintStatus.BELUM_DITANGANI
-      );
-      expect(filterBelum.length).toBe(1);
-      expect(filterBelum[0].complaintNumber).toBe("KAI-202610-0001");
+  describe("2. Complaint Table Filters & Pagination Math", () => {
+    it("filters complaints by status properly", () => {
+      const filterByStatus = (status: ComplaintStatus | "ALL") => {
+        if (status === "ALL") return mockComplaints;
+        return mockComplaints.filter((c) => c.status === status);
+      };
+
+      expect(filterByStatus("ALL").length).toBe(4);
+      expect(filterByStatus(ComplaintStatus.BELUM_DITANGANI).length).toBe(1);
+      expect(filterByStatus(ComplaintStatus.DALAM_PENANGANAN).length).toBe(1);
+      expect(filterByStatus(ComplaintStatus.MENUNGGU_VERIFIKASI).length).toBe(1);
+      expect(filterByStatus(ComplaintStatus.TERVERIFIKASI).length).toBe(1);
     });
 
-    it("filters by search query across ticket number, customer name, and description", () => {
-      const query = "gerbong";
-      const matches = mockComplaints.filter((c) =>
-        c.description.toLowerCase().includes(query) ||
-        c.customerName.toLowerCase().includes(query) ||
-        c.complaintNumber.toLowerCase().includes(query)
-      );
-      expect(matches.length).toBe(1);
-      expect(matches[0].id).toBe("c-1");
+    it("filters complaints by source correctly", () => {
+      const teleponOnly = mockComplaints.filter((c) => c.source === "Telepon");
+      expect(teleponOnly.length).toBe(1);
+      expect(teleponOnly[0].customerName).toBe("Budi");
     });
 
-    it("calculates pagination correctly", () => {
+    it("searches complaints across number, customer, and description", () => {
+      const search = (q: string) => {
+        const query = q.toLowerCase();
+        return mockComplaints.filter(
+          (c) =>
+            c.complaintNumber.toLowerCase().includes(query) ||
+            c.customerName.toLowerCase().includes(query) ||
+            c.description.toLowerCase().includes(query)
+        );
+      };
+
+      expect(search("budi").length).toBe(1);
+      expect(search("KAI-202610-0003").length).toBe(1);
+      expect(search("wifi").length).toBe(1);
+      expect(search("tidak_ada_keyword").length).toBe(0);
+    });
+
+    it("computes pagination correctly", () => {
+      const totalItems = mockComplaints.length; // 4
       const pageSize = 2;
-      const totalPages = Math.ceil(mockComplaints.length / pageSize);
+      const totalPages = Math.ceil(totalItems / pageSize);
+
       expect(totalPages).toBe(2);
 
       const page1 = mockComplaints.slice(0, 2);
@@ -176,45 +171,7 @@ describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
     });
   });
 
-  describe("3. SLA Calculation Accuracy for Badges", () => {
-    it("reports overdue for active complaints past target hours", () => {
-      const sla = calculateSla({
-        date: new Date(Date.now() - 30 * 3600 * 1000).toISOString(),
-        status: ComplaintStatus.BELUM_DITANGANI,
-        targetHours: 24,
-      });
-      expect(sla.isOverdue).toBe(true);
-      expect(sla.isMet).toBe(false);
-      expect(sla.badgeVariant).toBe("danger");
-    });
-
-    it("reports near deadline when remaining hours <= 6", () => {
-      const sla = calculateSla({
-        date: new Date(Date.now() - 20 * 3600 * 1000).toISOString(),
-        status: ComplaintStatus.DALAM_PENANGANAN,
-        targetHours: 24,
-      });
-      expect(sla.isNearDeadline).toBe(true);
-      expect(sla.isOverdue).toBe(false);
-      expect(sla.remainingHours).toBeLessThanOrEqual(6);
-    });
-
-    it("reports met when verified within target SLA", () => {
-      const startDate = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
-      const completedDate = new Date(Date.now() - 2 * 3600 * 1000).toISOString(); // 18 hours duration
-      const sla = calculateSla({
-        date: startDate,
-        status: ComplaintStatus.TERVERIFIKASI,
-        completedAt: completedDate,
-        targetHours: 24,
-      });
-      expect(sla.isMet).toBe(true);
-      expect(sla.isOverdue).toBe(false);
-      expect(sla.badgeVariant).toBe("success");
-    });
-  });
-
-  describe("4. Form Validation Constraints Aligned with Backend", () => {
+  describe("3. Form Validation Constraints Aligned with Backend", () => {
     it("validates that rejection feedback cannot be empty", () => {
       const validateRejection = (result: VerificationResult, feedback: string) => {
         if (result === VerificationResult.REJECTED && !feedback.trim()) {

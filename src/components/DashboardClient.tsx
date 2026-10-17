@@ -57,10 +57,9 @@ export default function DashboardClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [sourceFilter, setSourceFilter] = useState<string>("ALL");
-  const [slaFilter, setSlaFilter] = useState<string>("ALL");
   const [picOnlyFilter, setPicOnlyFilter] = useState(false);
   const [activeSpecialFilter, setActiveSpecialFilter] = useState<
-    "unassigned" | "sla_risk" | "my_tasks" | "revisions" | "urgent_review" | null
+    "unassigned" | "my_tasks" | "revisions" | null
   >(null);
 
   // Modals State
@@ -97,23 +96,15 @@ export default function DashboardClient({
   const handleFilterUnassigned = () => {
     setActiveSpecialFilter("unassigned");
     setStatusFilter("ALL");
-    setSlaFilter("ALL");
     setSourceFilter("ALL");
     setSearchQuery("");
     setPicOnlyFilter(false);
-  };
-
-  const handleFilterSlaRisk = () => {
-    setActiveSpecialFilter("sla_risk");
-    setSlaFilter("OVERDUE");
-    setStatusFilter("ALL");
   };
 
   const handleFilterMyTasks = () => {
     setActiveSpecialFilter("my_tasks");
     setPicOnlyFilter(true);
     setStatusFilter("ALL");
-    setSlaFilter("ALL");
   };
 
   const handleFilterRevisions = () => {
@@ -122,16 +113,9 @@ export default function DashboardClient({
     setStatusFilter("DALAM_PENANGANAN");
   };
 
-  const handleFilterUrgentReview = () => {
-    setActiveSpecialFilter("urgent_review");
-    setStatusFilter("MENUNGGU_VERIFIKASI");
-    setSlaFilter("OVERDUE");
-  };
-
   const handleResetSpecialFilters = () => {
     setActiveSpecialFilter(null);
     setStatusFilter("ALL");
-    setSlaFilter("ALL");
     setSourceFilter("ALL");
     setPicOnlyFilter(false);
   };
@@ -319,7 +303,7 @@ export default function DashboardClient({
   const countMyTasks = complaints.filter(isAssignedToCurrentUser).length;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 print:bg-white print:min-h-0 print:block print:p-0 print:m-0">
       {/* 1. Sidebar Navigasi */}
       <DashboardSidebar
         currentUser={currentUser}
@@ -344,8 +328,8 @@ export default function DashboardClient({
         onResetSpecialFilters={handleResetSpecialFilters}
       />
 
-      {/* 2. Main Content Area */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
+      {/* 2. Main Content Area (Disembunyikan saat mencetak agar hanya modal dokumen KAI yang dicetak) */}
+      <div className="flex-1 lg:pl-64 flex flex-col min-w-0 print:hidden">
         {/* Header */}
         <DashboardHeader
           currentUser={currentUser}
@@ -386,10 +370,8 @@ export default function DashboardClient({
                   Filter Khusus Aktif:{" "}
                   <b>
                     {activeSpecialFilter === "unassigned" && "Keluhan Belum Ditugaskan"}
-                    {activeSpecialFilter === "sla_risk" && "Keluhan Berisiko / Melewati SLA"}
                     {activeSpecialFilter === "my_tasks" && "Tugas Aktif Saya"}
                     {activeSpecialFilter === "revisions" && "Keluhan Memerlukan Revisi PIC"}
-                    {activeSpecialFilter === "urgent_review" && "Antrean Kritis Verifikasi"}
                   </b>
                 </span>
               </div>
@@ -417,11 +399,8 @@ export default function DashboardClient({
                   }}
                   onSelectSourceFilter={(source) => setSourceFilter(source)}
                   onFilterUnassigned={handleFilterUnassigned}
-                  onFilterSlaRisk={handleFilterSlaRisk}
                   activeSpecialFilter={
-                    activeSpecialFilter === "unassigned" || activeSpecialFilter === "sla_risk"
-                      ? activeSpecialFilter
-                      : null
+                    activeSpecialFilter === "unassigned" ? "unassigned" : null
                   }
                 />
               )}
@@ -432,15 +411,13 @@ export default function DashboardClient({
                   currentUser={currentUser}
                   onFilterMyTasks={handleFilterMyTasks}
                   onFilterRevisions={handleFilterRevisions}
-                  onFilterSlaRisk={handleFilterSlaRisk}
                   onSelectStatusFilter={(status) => {
                     setActiveSpecialFilter(null);
                     setStatusFilter(status);
                   }}
                   activeSpecialFilter={
                     activeSpecialFilter === "my_tasks" ||
-                    activeSpecialFilter === "revisions" ||
-                    activeSpecialFilter === "sla_risk"
+                    activeSpecialFilter === "revisions"
                       ? activeSpecialFilter
                       : null
                   }
@@ -459,10 +436,6 @@ export default function DashboardClient({
                     setActiveSpecialFilter(null);
                     setStatusFilter("TERVERIFIKASI");
                   }}
-                  onFilterUrgentReview={handleFilterUrgentReview}
-                  activeSpecialFilter={
-                    activeSpecialFilter === "urgent_review" ? "urgent_review" : null
-                  }
                   statusFilter={statusFilter}
                 />
               )}
@@ -514,8 +487,6 @@ export default function DashboardClient({
             }}
             sourceFilter={sourceFilter}
             onSelectSourceFilter={(source) => setSourceFilter(source)}
-            slaFilter={slaFilter}
-            onSelectSlaFilter={(sla) => setSlaFilter(sla)}
             searchQuery={searchQuery}
             onSearchQueryChange={(q) => setSearchQuery(q)}
             picOnlyFilter={picOnlyFilter}

@@ -4,7 +4,6 @@ import React, { useEffect } from "react";
 import Image from "next/image";
 import { ComplaintData, VerificationResult } from "@/types/database";
 import StatusBadge from "./StatusBadge";
-import SlaBadge from "./SlaBadge";
 
 interface ComplaintDetailModalProps {
   complaint: ComplaintData;
@@ -87,12 +86,11 @@ export default function ComplaintDetailModal({
 
         {/* Modal Body - Scrollable */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
-          {/* Status & SLA Bar */}
+          {/* Status Bar */}
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-slate-500 font-medium">Status:</span>
               <StatusBadge status={complaint.status} verifications={complaint.verifications} />
-              <SlaBadge complaint={complaint} />
             </div>
             <div className="flex items-center gap-2 text-xs">
               <span className="text-slate-500">Saluran:</span>

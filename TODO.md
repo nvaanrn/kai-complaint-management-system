@@ -159,4 +159,33 @@
   - [x] Restrukturisasi form *"Catat Keluhan Baru"* menjadi format **vertikal satu kolom** yang lega dan nyaman diisi.
   - [x] Integrasikan grafik *"Analisis Saluran"* eksklusif pada menu **Ringkasan & Metrik**, sehingga menu Daftar Keluhan dan Verifikasi Mutu lebih ringkas dan fokus.
 
+---
+
+## 🚫 FASE: Penghapusan Menyeluruh Fitur SLA (Selesai ✅)
+
+- [x] **Audit Kode & Skema Database:**
+  - [x] Audit menyeluruh seluruh direktori proyek untuk mendeteksi dependensi SLA (model Prisma, service, komponen UI, filter, overview metrics, dan test suites).
+- [x] **Pembersihan Database & Skema Prisma:**
+  - [x] Penghapusan model `SlaPolicy` dan enum `SlaCalendarType` dari [prisma/schema.prisma](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/schema.prisma).
+  - [x] Penghapusan kolom snapshot SLA (`slaTargetHours`, `slaCalendarType`, `slaPolicyId`) dan foreign key relasi dari model `Complaint`.
+  - [x] Pembuatan berkas migrasi baru [prisma/migrations/20261018061500_remove_sla_features/migration.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/migrations/20261018061500_remove_sla_features/migration.sql) dan deployment database aman tanpa data reset.
+  - [x] Penghapusan seeding `SlaPolicy` dari [prisma/seed.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/seed.ts).
+- [x] **Pembersihan Backend & Types:**
+  - [x] Penghapusan modul perhitungan SLA `src/lib/sla.ts`.
+  - [x] Penghapusan tipe data SLA (`SlaCalendarType`, `SlaPolicyData`, field SLA `ComplaintData`) dari [src/types/database.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/types/database.ts).
+  - [x] Pembersihan logika snapshot SLA pada fungsi `createComplaint` di [src/app/actions/complaints.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/actions/complaints.ts).
+- [x] **Pembersihan Antarmuka Pengguna (UI/UX):**
+  - [x] Penghapusan komponen `src/components/dashboard/SlaBadge.tsx`.
+  - [x] Pembersihan kartu risiko SLA, metrik kepatuhan SLA, dan tombol filter risiko SLA pada [AdminOverview.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/AdminOverview.tsx).
+  - [x] Penyesuaian KPI PIC menjadi 4 metrik independen operasional (Tugas Aktif, Perlu Revisi, Menunggu Review, Selesai) pada [PicOverview.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/PicOverview.tsx).
+  - [x] Penyesuaian KPI Verifikator (Antrean Verifikasi, Proses Lapangan, Telah Disetujui, Total Revisi Diminta) pada [VerifierOverview.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/VerifierOverview.tsx).
+  - [x] Penghapusan filter dropdown SLA, kolom "Status & SLA" menjadi "Status", dan render badge SLA pada [ComplaintTable.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/ComplaintTable.tsx).
+  - [x] Pembersihan tampilan badge SLA pada [ComplaintDetailModal.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/ComplaintDetailModal.tsx).
+  - [x] Pembersihan state dan handlers filter SLA pada [DashboardClient.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/DashboardClient.tsx).
+- [x] **Pembersihan Pengujian (Tests) & Verifikasi QA:**
+  - [x] Penghapusan test suite `tests/sla.test.ts`.
+  - [x] Penyesuaian test suite [tests/ui_dashboard_phase6.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/ui_dashboard_phase6.test.ts) dan [tests/e2e_security_release.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/e2e_security_release.test.ts) (84 tests lulus 100%).
+  - [x] Verifikasi TypeScript (`tsc --noEmit`), ESLint (`next lint`), dan Next.js production build (`next build`) lulus tanpa error.
+
+
 

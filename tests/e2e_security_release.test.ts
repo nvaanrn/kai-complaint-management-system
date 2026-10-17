@@ -8,7 +8,6 @@ import {
 } from "@/types/database";
 import { validateStateTransition } from "@/lib/state-machine";
 import { Permissions, UserSession, ComplaintSummary } from "@/lib/permissions";
-import { calculateSla } from "@/lib/sla";
 import { formatComplaintNumber } from "@/lib/complaintNumber";
 import {
   validateComplaintInput,
@@ -18,7 +17,7 @@ import {
   validateReopenReviewInput,
 } from "@/lib/validation";
 
-describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP", () => {
+describe("FASE 7 — Pengujian Integrasi, Keamanan, dan Arsip Dokumen SPKP", () => {
   // Test Actor Sessions
   const adminUser: UserSession = {
     id: "user-admin-01",
@@ -72,7 +71,6 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
       submittedAt?: Date | null;
       completedAt?: Date | null;
       submissionCount: number;
-      slaTargetHours: number;
       documentId?: string | null;
       verifications: Array<{
         id: string;
@@ -118,7 +116,6 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
         status: ComplaintStatus.BELUM_DITANGANI,
         picId: null,
         submissionCount: 0,
-        slaTargetHours: 24,
         verifications: [],
         auditLogs: [
           {
@@ -142,7 +139,7 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
 
       ticket.picId = picUser1.id;
       ticket.assignedAt = new Date("2026-10-14T08:30:00Z");
-      ticket.status = assignTransition.nextStatus;
+      ticket.status = assignTransition.nextStatus!;
       ticket.auditLogs.push({
         action: AuditAction.ASSIGN_PIC,
         userId: adminUser.id,
@@ -178,7 +175,7 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
       expect(submitTransition.isAllowed).toBe(true);
       expect(submitTransition.nextStatus).toBe(ComplaintStatus.MENUNGGU_VERIFIKASI);
 
-      ticket.status = submitTransition.nextStatus;
+      ticket.status = submitTransition.nextStatus!;
       ticket.submittedAt = new Date("2026-10-14T14:00:00Z");
       ticket.submissionCount += 1;
       expect(ticket.submissionCount).toBe(1);
@@ -193,7 +190,7 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
       expect(verifyTransition.isAllowed).toBe(true);
       expect(verifyTransition.nextStatus).toBe(ComplaintStatus.TERVERIFIKASI);
 
-      ticket.status = verifyTransition.nextStatus;
+      ticket.status = verifyTransition.nextStatus!;
       ticket.completedAt = new Date("2026-10-14T15:30:00Z");
       ticket.verifications.push({
         id: "verif-001",
@@ -263,7 +260,7 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
       expect(reopenTransition.nextStatus).toBe(ComplaintStatus.DALAM_PENANGANAN);
 
       // 10. Jika disetujui, status kembali DALAM_PENANGANAN & PIC TETAP SAMA
-      ticket.status = reopenTransition.nextStatus;
+      ticket.status = reopenTransition.nextStatus!;
       ticket.completedAt = null;
       expect(ticket.status).toBe(ComplaintStatus.DALAM_PENANGANAN);
       expect(ticket.picId).toBe(picUser1.id); // Retensi PIC utuh
@@ -280,7 +277,6 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
         status: ComplaintStatus.MENUNGGU_VERIFIKASI,
         picId: picUser2.id,
         submissionCount: 1,
-        slaTargetHours: 24,
         correctiveAction: "Penyangga kursi telah dipasang kembali",
         preventiveAction: "Pengecekan baut berkala",
         proofImageUrl: "https://storage.kai.id/proofs/chair_bad.webp",
@@ -306,7 +302,7 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
       expect(rejectTransition.nextStatus).toBe(ComplaintStatus.DALAM_PENANGANAN);
 
       // Mutasi status & simpan record verifikasi siklus 1
-      ticket.status = rejectTransition.nextStatus;
+      ticket.status = rejectTransition.nextStatus!;
       ticket.verifications.push({
         id: "verif-cycle-1",
         verifierId: verifikatorUser.id,
@@ -477,86 +473,9 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, SLA, dan Arsip Dokumen SPKP"
   });
 
   // =========================================================================
-  // LANGKAH 5: UJI AKURASI & ROBUSTNESS PERHITUNGAN SLA
+  // LANGKAH 5: UJI ARSIP DOKUMEN & IMMUTABILITY SNAPSHOT
   // =========================================================================
-  describe("Langkah 5: Perhitungan SLA & Robustness Edge Cases", () => {
-    it("Menggunakan target SLA snapshot dari tiket keluhan, bukan hardcoded 24h", () => {
-      // Keluhan fasilitas berat (target 48 jam)
-      const now = Date.now();
-      const sla48 = calculateSla({
-        date: new Date(now - 30 * 3600 * 1000), // 30 jam lalu
-        status: ComplaintStatus.DALAM_PENANGANAN,
-        targetHours: 48,
-        now,
-      });
-
-      // Jika target 48 jam, 30 jam masih AMAN (sisa 18 jam)
-      expect(sla48.isOverdue).toBe(false);
-      expect(sla48.targetHoursUsed).toBe(48);
-      expect(sla48.remainingHours).toBe(18);
-
-      // Keluhan respon cepat (target 12 jam)
-      const sla12 = calculateSla({
-        date: new Date(now - 14 * 3600 * 1000), // 14 jam lalu
-        status: ComplaintStatus.DALAM_PENANGANAN,
-        targetHours: 12,
-        now,
-      });
-      // Jika target 12 jam, 14 jam sudah OVERDUE (+2 jam)
-      expect(sla12.isOverdue).toBe(true);
-      expect(sla12.targetHoursUsed).toBe(12);
-    });
-
-    it("Keluhan dianggap selesai saat verifikator approve (completedAt), bukan waktu submit PIC", () => {
-      const date = new Date("2026-10-10T08:00:00Z");
-      const submittedAt = new Date("2026-10-10T14:00:00Z"); // PIC submit dalam 6 jam
-      const completedAt = new Date("2026-10-11T12:00:00Z"); // Verifikator approve 28 jam kemudian
-
-      // Kasus A: Sedang menunggu verifikasi (SLA sementara mengukur durasi PIC)
-      const slaWaiting = calculateSla({
-        date,
-        status: ComplaintStatus.MENUNGGU_VERIFIKASI,
-        submittedAt,
-        targetHours: 24,
-      });
-      expect(slaWaiting.elapsedHours).toBe(6);
-      expect(slaWaiting.isMet).toBe(true);
-
-      // Kasus B: Terverifikasi resmi (SLA final mengukur completedAt)
-      const slaFinal = calculateSla({
-        date,
-        status: ComplaintStatus.TERVERIFIKASI,
-        submittedAt,
-        completedAt,
-        targetHours: 24,
-      });
-      expect(slaFinal.elapsedHours).toBe(28);
-      expect(slaFinal.isOverdue).toBe(true); // 28 jam > 24 jam target
-      expect(slaFinal.isMet).toBe(false);
-    });
-
-    it("Robustness: Tanggal invalid atau nilai null ditangani secara aman tanpa throw error", () => {
-      const slaInvalid = calculateSla({
-        date: "invalid-date-string",
-        status: ComplaintStatus.BELUM_DITANGANI,
-        targetHours: 24,
-      });
-      expect(slaInvalid.statusText).toContain("Tanggal tidak valid");
-      expect(slaInvalid.badgeVariant).toBe("neutral");
-
-      const slaNullTarget = calculateSla({
-        date: new Date(),
-        status: ComplaintStatus.BELUM_DITANGANI,
-        targetHours: null,
-      });
-      expect(slaNullTarget.targetHoursUsed).toBe(24); // Fallback ke default 24h
-    });
-  });
-
-  // =========================================================================
-  // LANGKAH 6: UJI ARSIP DOKUMEN & IMMUTABILITY SNAPSHOT
-  // =========================================================================
-  describe("Langkah 6: Integritas Dokumen Arsip & Immutability", () => {
+  describe("Langkah 5: Integritas Dokumen Arsip & Immutability", () => {
     it("Snapshot arsip dokumen bersifat beku (immutable) meskipun data tiket aktif diubah di masa depan", () => {
       // 1. Data asli saat penerbitan dokumen
       const originalComplaint = {

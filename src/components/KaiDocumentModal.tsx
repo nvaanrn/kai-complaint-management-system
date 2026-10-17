@@ -1,9 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
-import { ComplaintData } from "@/components/DashboardClient";
-import { createDocumentBatch } from "@/app/actions/complaints";
+import React, { useState, useEffect } from "react";
+import { ComplaintData, Role } from "@/types/database";
+import {
+  createDocumentBatch,
+  getPublishedDocument,
+  getPublishedDocumentsList,
+} from "@/app/actions/complaints";
 import { exportComplaintsToExcel } from "@/lib/exportExcel";
+import KaiDocumentView from "./KaiDocumentView";
 import Image from "next/image";
 
 interface KaiDocumentModalProps {
@@ -34,6 +39,7 @@ export default function KaiDocumentModal({
     const yyyy = d.getFullYear();
     return `FR.SM/TI/033.001/${mm}-${yyyy}`;
   });
+
   const [docDate, setDocDate] = useState(() => {
     return new Date().toLocaleDateString("id-ID", {
       day: "numeric",
@@ -41,16 +47,132 @@ export default function KaiDocumentModal({
       year: "numeric",
     });
   });
+
   const [docVersion, setDocVersion] = useState(() => {
     const yyyy = new Date().getFullYear();
     return `002-${yyyy}`;
   });
+
   const [managementRep, setManagementRep] = useState("Ir. Bambang Triyono (MR)");
   const [isPreview, setIsPreview] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
+  const [archivedSnapshot, setArchivedSnapshot] = useState<ComplaintData[] | null>(null);
+  const [publishedDocsList, setPublishedDocsList] = useState<any[]>([]);
+  const [selectedArchiveId, setSelectedArchiveId] = useState<string>("");
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Muat daftar arsip dokumen resmi jika ada di database
+  useEffect(() => {
+    let isMounted = true;
+    async function loadArchives() {
+      try {
+        const res = await getPublishedDocumentsList();
+        if (res.success && res.data && isMounted) {
+          setPublishedDocsList(res.data);
+        }
+      } catch (err) {
+        console.error("Gagal memuat daftar arsip dokumen:", err);
+      }
+    }
+    loadArchives();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Handler memilih dokumen dari arsip resmi
+  const handleSelectArchive = async (archiveId: string) => {
+    setSelectedArchiveId(archiveId);
+    if (!archiveId) {
+      // Kembali ke mode pembuatan dokumen aktif
+      setIsPublished(false);
+      setArchivedSnapshot(null);
+      return;
+    }
+
+    const found = publishedDocsList.find((d) => d.id === archiveId);
+    if (!found) return;
+
+    try {
+      const res = await getPublishedDocument(found.documentNumber);
+      if (res.success && res.data) {
+        const doc = res.data;
+        setDocNumber(doc.documentNumber);
+        setDocVersion(doc.version || "002-2020");
+        setManagementRep(doc.managementRep || "Management Representative KAI");
+        if (doc.documentDate) {
+          setDocDate(
+            new Date(doc.documentDate).toLocaleDateString("id-ID", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })
+          );
+        }
+
+        // Petakan snapshot beku (immutable snapshot) kembali ke struktur ComplaintData
+        if (Array.isArray(doc.snapshotData)) {
+          const snapshotList: ComplaintData[] = doc.snapshotData.map((s: any) => ({
+            id: s.complaintId || s.id || `snapshot-${Math.random()}`,
+            complaintNumber: s.complaintNumber,
+            date: s.date,
+            customerName: s.customerName,
+            customerContact: s.customerContact || null,
+            daopOrStation: s.daopOrStation || null,
+            source: s.source,
+            category: s.category || null,
+            description: s.description,
+            status: "TERVERIFIKASI",
+            picId: null,
+            pic: s.picName ? { id: "", name: s.picName, email: "", role: Role.PIC } : null,
+            correctiveAction: s.correctiveAction || null,
+            preventiveAction: s.preventiveAction || null,
+            proofImageUrl: s.proofImageUrl || null,
+            notes: s.notes || null,
+            verifications: s.verifiedAt
+              ? [
+                  {
+                    id: `verif-snap-${s.complaintId}`,
+                    complaintId: s.complaintId,
+                    verifierId: "verifier",
+                    verifier: {
+                      id: "verifier",
+                      name: s.verifierName || "Verifikator Mutu",
+                      email: "",
+                      role: Role.VERIFIKATOR,
+                    },
+                    result: "APPROVED",
+                    feedback: "Disetujui",
+                    cycle: 1,
+                    verifiedAt: s.verifiedAt,
+                  },
+                ]
+              : [],
+            createdAt: s.date,
+            updatedAt: s.date,
+          }));
+          setArchivedSnapshot(snapshotList);
+        }
+        setIsPublished(true);
+        setIsPreview(true);
+        setNotification({
+          type: "success",
+          message: `Arsip resmi ${doc.documentNumber} berhasil dimuat. Data terkunci sesuai arsip publikasi.`,
+        });
+      }
+    } catch (err) {
+      console.error("Gagal mengambil data arsip:", err);
+      setNotification({
+        type: "error",
+        message: "Gagal memuat rincian arsip dokumen resmi.",
+      });
+    }
+  };
 
   const toggleSelect = (id: string) => {
+    if (isPublished) return; // Terkunci jika arsip terbit
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter((item) => item !== id));
     } else {
@@ -59,21 +181,49 @@ export default function KaiDocumentModal({
   };
 
   const selectAll = () => {
+    if (isPublished) return;
     setSelectedIds(complaints.map((c) => c.id));
   };
 
   const deselectAll = () => {
+    if (isPublished) return;
     setSelectedIds([]);
   };
 
-  const selectedList = complaints.filter((c) => selectedIds.includes(c.id));
+  // Sumber data keluhan: jika sedang melihat arsip resmi gunakan snapshot beku, jika draf gunakan keluhan terpilih
+  const displayList: ComplaintData[] =
+    isPublished && archivedSnapshot
+      ? archivedSnapshot
+      : complaints.filter((c) => selectedIds.includes(c.id));
 
+  // FITUR CETAK (PRINT)
+  // Menyiapkan dokumen dengan format baku KAI dan memicu dialog cetak browser
+  // TIDAK MENGUBAH / MEMUTASI DATABASE
   const handlePrint = () => {
-    window.print();
+    if (displayList.length === 0) {
+      setNotification({
+        type: "error",
+        message: "Pilih minimal 1 keluhan untuk dicetak.",
+      });
+      return;
+    }
+
+    if (!isPreview) {
+      setIsPreview(true);
+      // Beri jeda sejenak agar DOM layout siap sebelum dialog cetak browser terbuka
+      setTimeout(() => {
+        window.print();
+      }, 200);
+    } else {
+      window.print();
+    }
   };
 
+  // FITUR EKSPOR EXCEL
+  // Menghasilkan spreadsheet sesuai formulir FR.SM/TI/033.001
   const handleExportExcelFromModal = () => {
-    exportComplaintsToExcel(selectedList, {
+    if (displayList.length === 0) return;
+    exportComplaintsToExcel(displayList, {
       documentNumber: docNumber,
       documentDate: docDate,
       version: docVersion,
@@ -81,40 +231,35 @@ export default function KaiDocumentModal({
     });
   };
 
-  const handleSaveBatch = async () => {
-    if (selectedIds.length === 0) return;
-    setIsSaving(true);
-    await createDocumentBatch({
-      complaintIds: selectedIds,
-      documentNumber: docNumber,
-      managementRep,
-    });
-    setIsSaving(false);
-    handlePrint();
-  };
-
+  // FITUR UNDUH PDF
+  // Menghasilkan berkas PDF resmi sesuai spesifikasi dokumen KAI via @react-pdf/renderer
+  // TIDAK MENGUBAH / MEMUTASI DATABASE
   const handleDownloadPdf = async () => {
-    if (selectedIds.length === 0) return;
+    if (displayList.length === 0) {
+      setNotification({
+        type: "error",
+        message: "Pilih minimal 1 keluhan untuk diunduh sebagai PDF.",
+      });
+      return;
+    }
+
     setIsDownloading(true);
     try {
-      await createDocumentBatch({
-        complaintIds: selectedIds,
-        documentNumber: docNumber,
-        managementRep,
-      });
-
       const { pdf } = await import("@react-pdf/renderer");
       const { KaiDocumentPdf } = await import("@/components/pdf/KaiDocumentPdf");
 
+      const logoUrl =
+        typeof window !== "undefined" ? window.location.origin + "/kai-logo.png" : undefined;
+
       const blob = await pdf(
         <KaiDocumentPdf
-          complaints={selectedList}
+          complaints={displayList}
           documentNumber={docNumber}
           documentDate={docDate}
           version={docVersion}
           managementRep={managementRep}
           creatorName={currentUser.name || "Administrator KAI"}
-          logoUrl={window.location.origin + "/kai-logo.png"}
+          logoUrl={logoUrl}
         />
       ).toBlob();
 
@@ -128,8 +273,77 @@ export default function KaiDocumentModal({
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Gagal mengunduh dokumen PDF:", error);
+      setNotification({
+        type: "error",
+        message: "Terjadi kesalahan saat memproses unduhan berkas PDF.",
+      });
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  // FITUR PENERBITAN DOKUMEN RESMI (KHUSUS ADMIN)
+  // Membekukan keluhan ke dalam immutable snapshot arsip permanen
+  const handlePublishBatch = async () => {
+    if (selectedIds.length === 0) {
+      setNotification({
+        type: "error",
+        message: "Pilih minimal 1 keluhan untuk diterbitkan.",
+      });
+      return;
+    }
+
+    if (currentUser.role !== Role.ADMIN) {
+      setNotification({
+        type: "error",
+        message: "Hanya Admin yang berwenang menerbitkan dokumen rekapitulasi audit resmi.",
+      });
+      return;
+    }
+
+    // Periksa status keluhan
+    const unverified = displayList.filter((c) => c.status !== "TERVERIFIKASI");
+    if (unverified.length > 0) {
+      setNotification({
+        type: "error",
+        message: `Keluhan ${unverified[0].complaintNumber} belum TERVERIFIKASI. Hanya keluhan terverifikasi yang dapat diterbitkan.`,
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await createDocumentBatch({
+        complaintIds: selectedIds,
+        documentNumber: docNumber,
+        managementRep,
+      });
+
+      if (result.success) {
+        setIsPublished(true);
+        setNotification({
+          type: "success",
+          message: `Dokumen ${docNumber} berhasil diterbitkan resmi dan snapshot data telah terkunci.`,
+        });
+        // Muat ulang daftar arsip
+        const resArchives = await getPublishedDocumentsList();
+        if (resArchives.success && resArchives.data) {
+          setPublishedDocsList(resArchives.data);
+        }
+      } else {
+        setNotification({
+          type: "error",
+          message: result.error || "Gagal menerbitkan dokumen resmi.",
+        });
+      }
+    } catch (err: any) {
+      console.error("Gagal menerbitkan dokumen:", err);
+      setNotification({
+        type: "error",
+        message: err.message || "Gagal menerbitkan dokumen resmi.",
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -143,10 +357,10 @@ export default function KaiDocumentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
-      <div className="w-full max-w-7xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-4 max-h-[96vh]">
-        {/* Modal Top Bar (Screen Only) */}
-        <div className="p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between shrink-0 print:hidden">
+    <div className="kai-document-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
+      <div className="kai-document-modal-card w-full max-w-7xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-4 max-h-[96vh]">
+        {/* Modal Top Bar (Screen Only - Disembunyikan saat Print) */}
+        <div className="p-4 sm:p-5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden modal-action-bar">
           <div className="flex items-center gap-3">
             <Image
               src="/kai-logo.png"
@@ -162,6 +376,11 @@ export default function KaiDocumentModal({
                 <span className="text-[10px] bg-yellow-400 text-slate-950 font-black px-2 py-0.5 rounded">
                   TERBATAS
                 </span>
+                {isPublished && (
+                  <span className="text-[10px] bg-emerald-500 text-white font-bold px-2 py-0.5 rounded shadow-2xs">
+                    TERKUNCI / TERBIT
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-slate-400">
                 Pengelolaan dan Penanganan Keluhan Pelanggan PT Kereta Api Indonesia (Persero)
@@ -169,26 +388,47 @@ export default function KaiDocumentModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Tombol Aksi Utama */}
+          <div className="flex flex-wrap items-center gap-2">
             {!isPreview ? (
-              <button
-                onClick={() => setIsPreview(true)}
-                disabled={selectedIds.length === 0}
-                className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-xs"
-              >
-                Pratinjau Format Baku &rarr;
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsPreview(true)}
+                  disabled={displayList.length === 0}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition cursor-pointer disabled:opacity-50 shadow-xs flex items-center gap-1.5"
+                >
+                  <span>Pratinjau Format Baku</span>
+                  <span>&rarr;</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  disabled={displayList.length === 0}
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Cetak langsung melalui dialog print komputer"
+                >
+                  <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  <span>Print / Cetak</span>
+                </button>
+              </>
             ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => setIsPreview(false)}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 rounded-xl transition"
+                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 rounded-xl transition cursor-pointer"
                 >
                   &larr; Ubah Pilihan
                 </button>
+
+                {/* Tombol Ekspor Excel */}
                 <button
+                  type="button"
                   onClick={handleExportExcelFromModal}
-                  disabled={selectedList.length === 0}
+                  disabled={displayList.length === 0}
                   className="px-3 py-1.5 text-xs font-semibold text-emerald-100 bg-emerald-700 hover:bg-emerald-600 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   title="Unduh format spreadsheet Excel persis formulir KAI (.xlsx)"
                 >
@@ -197,9 +437,12 @@ export default function KaiDocumentModal({
                   </svg>
                   <span>Ekspor Excel (.xlsx)</span>
                 </button>
+
+                {/* Tombol Unduh PDF Resmi */}
                 <button
+                  type="button"
                   onClick={handleDownloadPdf}
-                  disabled={isDownloading || isSaving || selectedList.length === 0}
+                  disabled={isDownloading || displayList.length === 0}
                   className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-600 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   title="Unduh berkas PDF resmi KAI"
                 >
@@ -208,20 +451,41 @@ export default function KaiDocumentModal({
                   </svg>
                   <span>{isDownloading ? "Memproses PDF..." : "Unduh PDF"}</span>
                 </button>
+
+                {/* Tombol Cetak / Print Browser */}
                 <button
-                  onClick={handleSaveBatch}
-                  disabled={isSaving || isDownloading || selectedList.length === 0}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                  title="Cetak via browser"
+                  type="button"
+                  onClick={handlePrint}
+                  disabled={displayList.length === 0}
+                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                  title="Buka dialog cetak sistem komputer pengguna"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
-                  <span>{isSaving ? "Menyimpan..." : "Cetak"}</span>
+                  <span>Print / Cetak</span>
                 </button>
+
+                {/* Tombol Terbitkan Dokumen (Khusus Admin bila belum diterbitkan) */}
+                {currentUser.role === Role.ADMIN && !isPublished && (
+                  <button
+                    type="button"
+                    onClick={handlePublishBatch}
+                    disabled={isSaving || displayList.length === 0}
+                    className="px-3 py-1.5 text-xs font-semibold text-amber-200 hover:text-white bg-amber-950/80 hover:bg-amber-900 border border-amber-700/60 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Terbitkan secara resmi dan bekukan snapshot audit"
+                  >
+                    <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <span>{isSaving ? "Menerbitkan..." : "Terbitkan & Kunci"}</span>
+                  </button>
+                )}
               </>
             )}
+
             <button
+              type="button"
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition text-lg cursor-pointer ml-1"
             >
@@ -230,29 +494,80 @@ export default function KaiDocumentModal({
           </div>
         </div>
 
+        {/* Notifikasi feedback */}
+        {notification && (
+          <div
+            className={`px-4 py-2 text-xs flex items-center justify-between border-b print:hidden ${
+              notification.type === "success"
+                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                : "bg-rose-50 text-rose-800 border-rose-200"
+            }`}
+          >
+            <span>{notification.message}</span>
+            <button
+              onClick={() => setNotification(null)}
+              className="text-slate-400 hover:text-slate-600 font-bold ml-2 cursor-pointer"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+
         {/* Content Area */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-100/60">
-          {!isPreview ? (
-            /* TABEL PEMILIHAN KELUHAN & PENGATURAN METADATA */
-            <div className="space-y-4">
+        <div className="kai-document-modal-body p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-100/60 print:bg-white print:p-0">
+          {/* TABEL PEMILIHAN KELUHAN & PENGATURAN METADATA (Tampil di layar saat !isPreview, selalu disembunyikan saat Cetak) */}
+          <div className={`space-y-4 print:hidden ${!isPreview ? "block" : "hidden"}`}>
+              {/* Opsi Memilih dari Arsip Dokumen Resmi yang Sudah Terbit */}
+              {publishedDocsList.length > 0 && (
+                <div className="bg-blue-50/70 border border-blue-200 p-4 rounded-xl flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h5 className="text-xs font-bold text-blue-900">
+                      Buka Dokumen Resmi dari Arsip Mutu:
+                    </h5>
+                    <p className="text-[11px] text-blue-700">
+                      Pilih dokumen yang telah diterbitkan untuk melihat atau mencetak salinan arsip asli.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedArchiveId}
+                      onChange={(e) => handleSelectArchive(e.target.value)}
+                      className="px-3 py-1.5 text-xs border border-blue-300 rounded-lg bg-white text-slate-800 font-medium"
+                    >
+                      <option value="">-- Buat Draf Dokumen Baru --</option>
+                      {publishedDocsList.map((doc) => (
+                        <option key={doc.id} value={doc.id}>
+                          {doc.documentNumber} ({doc.totalComplaints} keluhan) -{" "}
+                          {new Date(doc.documentDate).toLocaleDateString("id-ID")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Pengaturan Header Formulir */}
               <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                     Pengaturan Header Formulir FR.SM/TI/033.001
                   </h4>
-                  <button
-                    onClick={() => {
-                      const todayStr = new Date().toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      });
-                      setDocDate(todayStr);
-                    }}
-                    className="text-[11px] text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
-                  >
-                    Gunakan Tanggal Hari Ini
-                  </button>
+                  {!isPublished && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const todayStr = new Date().toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        });
+                        setDocDate(todayStr);
+                      }}
+                      className="text-[11px] text-blue-600 hover:text-blue-800 font-medium cursor-pointer"
+                    >
+                      Gunakan Tanggal Hari Ini
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -262,9 +577,10 @@ export default function KaiDocumentModal({
                     </label>
                     <input
                       type="text"
+                      disabled={isPublished}
                       value={docNumber}
                       onChange={(e) => setDocNumber(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50 font-mono"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50 font-mono disabled:bg-slate-100 disabled:text-slate-500"
                     />
                   </div>
                   <div>
@@ -273,9 +589,10 @@ export default function KaiDocumentModal({
                     </label>
                     <input
                       type="text"
+                      disabled={isPublished}
                       value={docDate}
                       onChange={(e) => setDocDate(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50 disabled:bg-slate-100 disabled:text-slate-500"
                     />
                   </div>
                   <div>
@@ -284,9 +601,10 @@ export default function KaiDocumentModal({
                     </label>
                     <input
                       type="text"
+                      disabled={isPublished}
                       value={docVersion}
                       onChange={(e) => setDocVersion(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50 font-mono"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50 font-mono disabled:bg-slate-100 disabled:text-slate-500"
                     />
                   </div>
                   <div>
@@ -295,14 +613,16 @@ export default function KaiDocumentModal({
                     </label>
                     <input
                       type="text"
+                      disabled={isPublished}
                       value={managementRep}
                       onChange={(e) => setManagementRep(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50 disabled:bg-slate-100 disabled:text-slate-500"
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Tabel Pemilihan Keluhan */}
               <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
                 <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -314,21 +634,25 @@ export default function KaiDocumentModal({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={selectAll}
-                      className="text-xs font-medium text-blue-600 hover:text-blue-800 cursor-pointer"
-                    >
-                      Pilih Semua
-                    </button>
-                    <span className="text-slate-300">|</span>
-                    <button
-                      onClick={deselectAll}
-                      className="text-xs font-medium text-slate-500 hover:text-slate-700 cursor-pointer"
-                    >
-                      Batal Pilih
-                    </button>
-                  </div>
+                  {!isPublished && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={selectAll}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800 cursor-pointer"
+                      >
+                        Pilih Semua
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        type="button"
+                        onClick={deselectAll}
+                        className="text-xs font-medium text-slate-500 hover:text-slate-700 cursor-pointer"
+                      >
+                        Batal Pilih
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="overflow-x-auto max-h-96">
@@ -360,6 +684,7 @@ export default function KaiDocumentModal({
                                 type="checkbox"
                                 checked={isChecked}
                                 onChange={() => {}}
+                                disabled={isPublished}
                                 className="rounded text-blue-900 focus:ring-blue-600 cursor-pointer"
                               />
                             </td>
@@ -395,258 +720,24 @@ export default function KaiDocumentModal({
                 </div>
               </div>
             </div>
-          ) : (
-            /* ======================================================== */
-            /* PRATINJAU DOKUMEN BAKU PERSIS SESUAI GAMBAR ACUAN KAI     */
-            /* ======================================================== */
-            <div className="bg-white p-4 sm:p-8 rounded-xl shadow-lg border border-slate-300 w-full overflow-x-auto print:overflow-visible print:border-none print:shadow-none print:p-0 print:m-0 text-slate-900 font-sans">
-              <div className="min-w-[1050px] print:min-w-0 print:w-full print:text-[10px]">
-                {/* 1. KOP / HEADER BAKU KAI 3-BAGIAN */}
-                <div className="border border-black mb-3">
-                  <div className="grid grid-cols-12 divide-x divide-black">
-                    {/* Kolom Kiri: Logo KAI & Badge TERBATAS */}
-                    <div className="col-span-2 flex flex-col items-center justify-between p-2 divide-y divide-black">
-                      <div className="h-14 flex items-center justify-center w-full pb-2">
-                        <Image
-                          src="/kai-logo.png"
-                          alt="KAI Logo"
-                          width={110}
-                          height={40}
-                          className="h-10 w-auto object-contain"
-                          unoptimized
-                        />
-                      </div>
-                      <div className="w-full pt-2 flex items-center justify-center">
-                        <div className="border-2 border-yellow-400 px-3 py-1 text-center w-full bg-white shadow-2xs">
-                          <span className="text-yellow-500 font-black text-xs tracking-widest block">
-                            TERBATAS
-                          </span>
-                        </div>
-                      </div>
-                    </div>
 
-                    {/* Kolom Tengah: Judul Resmi Dokumen */}
-                    <div className="col-span-7 flex flex-col justify-between text-center divide-y divide-black">
-                      <div className="py-2.5 px-3">
-                        <h1 className="text-sm font-black tracking-wide text-black uppercase">
-                          PT KERETA API INDONESIA(PERSERO)
-                        </h1>
-                        <h2 className="text-xs font-bold tracking-wider text-black uppercase mt-0.5">
-                          SISTEM INFORMASI
-                        </h2>
-                      </div>
-                      <div className="py-3 px-3 flex-1 flex items-center justify-center">
-                        <h3 className="text-xs sm:text-sm font-black tracking-wide text-black uppercase">
-                          DOKUMENTASI PENGELOLAAN DAN PENANGANAN KELUHAN PELANGGAN
-                        </h3>
-                      </div>
-                    </div>
-
-                    {/* Kolom Kanan: Kotak Metadata Dokumen */}
-                    <div className="col-span-3 text-[11px] font-sans divide-y divide-black">
-                      <div className="grid grid-cols-12 divide-x divide-black py-1">
-                        <span className="col-span-5 px-2 font-medium">No. Dokumen</span>
-                        <span className="col-span-7 px-2 font-mono font-medium">: {docNumber}</span>
-                      </div>
-                      <div className="grid grid-cols-12 divide-x divide-black py-1">
-                        <span className="col-span-5 px-2 font-medium">Tanggal</span>
-                        <span className="col-span-7 px-2 font-medium">: {docDate}</span>
-                      </div>
-                      <div className="grid grid-cols-12 divide-x divide-black py-1">
-                        <span className="col-span-5 px-2 font-medium">Versi</span>
-                        <span className="col-span-7 px-2 font-mono font-medium">: {docVersion}</span>
-                      </div>
-                      <div className="grid grid-cols-12 divide-x divide-black py-1">
-                        <span className="col-span-5 px-2 font-medium">Halaman</span>
-                        <span className="col-span-7 px-2 font-medium">: 1</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. TABEL REKAPITULASI DENGAN HEADER BERTINGKAT & TEKS MERAH */}
-                <table className="w-full text-left text-[11px] border-collapse border border-black">
-                  <thead>
-                    {/* Header Baris 1 */}
-                    <tr className="bg-white text-black font-bold text-center border-b border-black">
-                      <th rowSpan={2} className="border border-black px-2 py-2 w-8 align-middle">
-                        No
-                      </th>
-                      <th rowSpan={2} className="border border-black px-2 py-2 w-24 align-middle">
-                        Tanggal
-                      </th>
-                      <th rowSpan={2} className="border border-black px-2 py-2 w-32 align-middle">
-                        Pelanggan
-                      </th>
-                      <th rowSpan={2} className="border border-black px-2 py-2 w-24 align-middle">
-                        Sumber
-                      </th>
-                      <th rowSpan={2} className="border border-black px-2 py-2 w-52 align-middle">
-                        Deskripsi Keluhan
-                      </th>
-                      <th rowSpan={2} className="border border-black px-2 py-2 w-56 align-middle">
-                        Tindakan perbaikan dan pencegahan yang diambil
-                      </th>
-                      <th colSpan={3} className="border border-black px-2 py-1.5 align-middle">
-                        Verification
-                      </th>
-                      <th rowSpan={2} className="border border-black px-2 py-2 w-32 align-middle">
-                        Keterangan
-                      </th>
-                    </tr>
-
-                    {/* Header Baris 2 (Sub-kolom Verification) */}
-                    <tr className="bg-white text-black font-bold text-center border-b border-black">
-                      <th className="border border-black px-2 py-1 w-20 align-middle">Tgl</th>
-                      <th className="border border-black px-2 py-1 w-24 align-middle">PIC</th>
-                      <th className="border border-black px-2 py-1 w-20 align-middle">Hasil</th>
-                    </tr>
-
-
-                  </thead>
-
-                  {/* Data Rows */}
-                  <tbody className="divide-y divide-black text-black">
-                    {selectedList.map((item, idx) => {
-                      const formattedDate = formatItemDate(item.date);
-                      const verificationDate =
-                        item.verifications && item.verifications.length > 0
-                          ? formatItemDate(item.verifications[0].verifiedAt)
-                          : item.submittedAt
-                          ? formatItemDate(item.submittedAt)
-                          : "-";
-
-                      const picName = item.pic?.name || (item.picId ? "Petugas PIC" : "-");
-                      const verificationResult =
-                        item.status === "TERVERIFIKASI"
-                          ? (item.verifications && item.verifications.length > 0 && item.verifications[0].feedback ? item.verifications[0].feedback : "Disetujui")
-                          : item.status;
-
-                      return (
-                        <tr key={item.id} className="align-top hover:bg-slate-50">
-                          <td className="border border-black p-2 text-center font-medium">
-                            {idx + 1}
-                          </td>
-                          <td className="border border-black p-2 text-center whitespace-nowrap">
-                            {formattedDate}
-                          </td>
-                          <td className="border border-black p-2">
-                            <span className="font-semibold block">{item.customerName}</span>
-                            {item.daopOrStation && (
-                              <span className="text-[10px] text-slate-500 block">
-                                {item.daopOrStation}
-                              </span>
-                            )}
-                            {item.customerContact && (
-                              <span className="text-[10px] text-slate-500 block">
-                                {item.customerContact}
-                              </span>
-                            )}
-                          </td>
-                          <td className="border border-black p-2">{item.source}</td>
-                          <td className="border border-black p-2 leading-relaxed">
-                            {item.description}
-                          </td>
-                          <td className="border border-black p-2 space-y-1">
-                            {item.correctiveAction ? (
-                              <div>
-                                <span className="font-bold text-[10px] uppercase block text-slate-700">
-                                  Perbaikan:
-                                </span>
-                                <span>{item.correctiveAction}</span>
-                              </div>
-                            ) : null}
-                            {item.preventiveAction ? (
-                              <div className={item.correctiveAction ? "pt-1 border-t border-slate-200" : ""}>
-                                <span className="font-bold text-[10px] uppercase block text-slate-700">
-                                  Pencegahan:
-                                </span>
-                                <span>{item.preventiveAction}</span>
-                              </div>
-                            ) : null}
-                            {!item.correctiveAction && !item.preventiveAction && (
-                              <span className="text-slate-400 italic">Belum ada tindakan</span>
-                            )}
-                          </td>
-                          <td className="border border-black p-2 text-center whitespace-nowrap">
-                            {verificationDate}
-                          </td>
-                          <td className="border border-black p-2 text-center font-medium">
-                            {picName}
-                          </td>
-                          <td className="border border-black p-2 text-center">
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase inline-block ${
-                                item.status === "TERVERIFIKASI"
-                                  ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
-                                  : "bg-slate-100 text-slate-800"
-                              }`}
-                            >
-                              {verificationResult}
-                            </span>
-                          </td>
-                          <td className="border border-black p-2 font-mono text-[10px]">
-                            <div className="font-bold text-slate-900">{item.complaintNumber}</div>
-                            {item.notes && <div className="text-slate-600 mt-0.5">{item.notes}</div>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-
-                    {/* Jika keluhan kurang dari 4 baris, tampilkan baris kosong agar menyerupai lembar formulir baku di gambar */}
-                    {selectedList.length < 4 &&
-                      Array.from({ length: 4 - selectedList.length }).map((_, i) => (
-                        <tr key={`empty-${i}`} className="h-9">
-                          <td className="border border-black p-2 text-center text-slate-300">
-                            {selectedList.length + i + 1}
-                          </td>
-                          <td className="border border-black p-2"></td>
-                          <td className="border border-black p-2"></td>
-                          <td className="border border-black p-2"></td>
-                          <td className="border border-black p-2"></td>
-                          <td className="border border-black p-2"></td>
-                          <td className="border border-black p-2"></td>
-                          <td className="border border-black p-2"></td>
-                          <td className="border border-black p-2"></td>
-                          <td className="border border-black p-2"></td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-
-                {/* 3. TANDA TANGAN RESMI KAI */}
-                <div className="mt-8 pt-4 grid grid-cols-2 gap-8 text-center text-xs break-inside-avoid">
-                  <div>
-                    <p className="text-slate-600 mb-1">Dibuat Oleh (Pelaksana SPKP):</p>
-                    <p className="font-semibold text-slate-800">Petugas Pengelola SPKP</p>
-                    <div className="h-16 flex items-end justify-center">
-                      <p className="font-bold text-slate-900 underline underline-offset-4">
-                        {currentUser.name || "Administrator KAI"}
-                      </p>
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1">Tanggal: {docDate}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-slate-600 mb-1">Mengetahui:</p>
-                    <p className="font-semibold text-slate-800">Management Representative (MR)</p>
-                    <div className="h-16 flex items-end justify-center">
-                      <p className="font-bold text-slate-900 underline underline-offset-4">
-                        {managementRep}
-                      </p>
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1">Tanggal: {docDate}</p>
-                  </div>
-                </div>
-
-                {/* 4. FOOTER RESMI KAI */}
-                <div className="mt-8 pt-3 border-t border-black flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                  <span>Formulir Baku FR.SM/TI/033.001 - PT Kereta Api Indonesia (Persero)</span>
-                  <span>Edisi: {docVersion}</span>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* PRATINJAU & AREA CETAK DOKUMEN BAKU PERSIS STANDAR KAI */}
+          <div
+            className={`kai-printable-container bg-white p-2 sm:p-6 rounded-xl shadow-lg border border-slate-300 w-full overflow-x-auto print:overflow-visible print:border-none print:shadow-none print:p-0 print:m-0 print:block ${
+              isPreview ? "block" : "hidden print:block"
+            }`}
+          >
+            <KaiDocumentView
+              complaints={displayList}
+              documentNumber={docNumber}
+              documentDate={docDate}
+              version={docVersion}
+              managementRep={managementRep}
+              creatorName={currentUser.name || "Administrator KAI"}
+              pageInfo="1 dari 1"
+              isPublished={isPublished}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -11,6 +11,8 @@ export interface ComplaintSummary {
   id: string;
   picId: string | null;
   status: ComplaintStatus | string;
+  complaintNumber?: string | null;
+  documentId?: string | null;
 }
 
 /**

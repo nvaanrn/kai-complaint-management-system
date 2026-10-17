@@ -3,8 +3,6 @@
 import React, { useState, useMemo } from "react";
 import { ComplaintData, UserSummary, Role } from "@/types/database";
 import StatusBadge from "./StatusBadge";
-import SlaBadge from "./SlaBadge";
-import { calculateSla } from "@/lib/sla";
 
 interface ComplaintTableProps {
   complaints: ComplaintData[];
@@ -14,8 +12,6 @@ interface ComplaintTableProps {
   onSelectStatusFilter: (status: string) => void;
   sourceFilter: string;
   onSelectSourceFilter: (source: string) => void;
-  slaFilter: string;
-  onSelectSlaFilter: (sla: string) => void;
   searchQuery: string;
   onSearchQueryChange: (q: string) => void;
   picOnlyFilter: boolean;
@@ -35,8 +31,6 @@ export default function ComplaintTable({
   onSelectStatusFilter,
   sourceFilter,
   onSelectSourceFilter,
-  slaFilter,
-  onSelectSlaFilter,
   searchQuery,
   onSearchQueryChange,
   picOnlyFilter,
@@ -84,22 +78,7 @@ export default function ComplaintTable({
         return false;
       }
 
-      // 4. SLA Filter
-      if (slaFilter !== "ALL") {
-        const sla = calculateSla({
-          date: item.date,
-          status: item.status,
-          submittedAt: item.submittedAt,
-          completedAt: item.completedAt,
-          targetHours: item.slaTargetHours,
-        });
-
-        if (slaFilter === "OVERDUE" && !sla.isOverdue) return false;
-        if (slaFilter === "NEAR_DEADLINE" && !sla.isNearDeadline) return false;
-        if (slaFilter === "MET" && !sla.isMet) return false;
-      }
-
-      // 5. Search Query
+      // 4. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchNumber = (item.complaintNumber || "").toLowerCase().includes(q);
@@ -119,16 +98,14 @@ export default function ComplaintTable({
     complaints,
     statusFilter,
     sourceFilter,
-    slaFilter,
     picOnlyFilter,
     searchQuery,
     isAssignedToCurrentUser,
   ]);
 
-  // Reset page when filter changes
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, sourceFilter, slaFilter, picOnlyFilter, searchQuery]);
+  }, [statusFilter, sourceFilter, picOnlyFilter, searchQuery]);
 
   // Pagination Math
   const totalItems = filteredData.length;
@@ -203,7 +180,7 @@ export default function ComplaintTable({
         </div>
       </div>
 
-      {/* 2. Sub-toolbar: Status Tabs, SLA Filter, Source Filter */}
+      {/* 2. Sub-toolbar: Status Tabs, Source Filter */}
       <div className="p-3.5 sm:p-4 bg-slate-50/60 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
         {/* Status Filter Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none max-w-full">
@@ -238,23 +215,8 @@ export default function ComplaintTable({
           ))}
         </div>
 
-        {/* Filters Group (SLA & Saluran) */}
+        {/* Filters Group (Saluran) */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* SLA Filter */}
-          <div className="flex items-center gap-1.5">
-            <label htmlFor="sla-filter-select" className="text-xs text-slate-500 font-medium">SLA:</label>
-            <select
-              id="sla-filter-select"
-              value={slaFilter}
-              onChange={(e) => onSelectSlaFilter(e.target.value)}
-              className="py-1 px-2.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
-            >
-              <option value="ALL">Semua SLA</option>
-              <option value="OVERDUE">🚨 Lewat Batas (Overdue)</option>
-              <option value="NEAR_DEADLINE">⏱️ Mendekati Batas (≤6j)</option>
-              <option value="MET">✓ Selesai Tepat Waktu</option>
-            </select>
-          </div>
 
           {/* Saluran Filter */}
           <div className="flex items-center gap-1.5">
@@ -275,14 +237,12 @@ export default function ComplaintTable({
             </select>
           </div>
 
-          {/* Reset All Filters button if active */}
-          {(statusFilter !== "ALL" || sourceFilter !== "ALL" || slaFilter !== "ALL" || searchQuery || picOnlyFilter) && (
+          {(statusFilter !== "ALL" || sourceFilter !== "ALL" || searchQuery || picOnlyFilter) && (
             <button
               type="button"
               onClick={() => {
                 onSelectStatusFilter("ALL");
                 onSelectSourceFilter("ALL");
-                onSelectSlaFilter("ALL");
                 onSearchQueryChange("");
                 onTogglePicOnly(false);
               }}
@@ -302,7 +262,7 @@ export default function ComplaintTable({
               <th scope="col" className="px-4 py-3.5 w-[22%]">Tiket & Saluran</th>
               <th scope="col" className="px-4 py-3.5 w-[30%]">Pelapor & Masalah</th>
               <th scope="col" className="px-4 py-3.5 w-[18%]">Petugas PIC</th>
-              <th scope="col" className="px-3 py-3.5 w-[18%]">Status & SLA</th>
+              <th scope="col" className="px-3 py-3.5 w-[18%]">Status</th>
               <th scope="col" className="px-4 py-3.5 w-[12%] text-right">Aksi</th>
             </tr>
           </thead>
@@ -324,13 +284,12 @@ export default function ComplaintTable({
                         ? "Belum ada tiket keluhan yang ditugaskan kepada Anda."
                         : "Tidak ada data yang sesuai dengan kriteria filter saat ini."}
                     </p>
-                    {(statusFilter !== "ALL" || sourceFilter !== "ALL" || slaFilter !== "ALL" || searchQuery || picOnlyFilter) && (
+                    {(statusFilter !== "ALL" || sourceFilter !== "ALL" || searchQuery || picOnlyFilter) && (
                       <button
                         type="button"
                         onClick={() => {
                           onSelectStatusFilter("ALL");
                           onSelectSourceFilter("ALL");
-                          onSelectSlaFilter("ALL");
                           onSearchQueryChange("");
                           onTogglePicOnly(false);
                         }}
@@ -404,15 +363,12 @@ export default function ComplaintTable({
                     )}
                   </td>
 
-                  {/* 4. Status & SLA */}
+                  {/* 4. Status */}
                   <td className="px-3 py-3.5">
-                    <div className="flex flex-col items-start gap-1">
-                      <StatusBadge
-                        status={item.status}
-                        verifications={item.verifications}
-                      />
-                      <SlaBadge complaint={item} />
-                    </div>
+                    <StatusBadge
+                      status={item.status}
+                      verifications={item.verifications}
+                    />
                   </td>
 
                   {/* 5. Aksi: Mata (Lihat), Pensil (Edit/Aksi), Sampah (Hapus Admin) */}
