@@ -139,8 +139,8 @@ export default function ComplaintTable({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
-          {/* Ekspor Excel Button */}
-          {currentUser.role !== Role.ADMIN && onExportExcel && (
+          {/* Ekspor Excel Button — tampil untuk semua role */}
+          {onExportExcel && (
             <button
               onClick={onExportExcel}
               type="button"

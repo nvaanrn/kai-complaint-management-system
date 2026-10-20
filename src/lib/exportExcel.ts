@@ -19,7 +19,7 @@ export function exportComplaintsToExcel(
 
   const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0");
   const currentYear = new Date().getFullYear();
-  
+
   const docNumber = opts.documentNumber || `FR.SM/TI/033.001/${currentMonth}-${currentYear}`;
   const docDate =
     opts.documentDate ||
@@ -256,6 +256,39 @@ export function exportComplaintsToExcel(
     { wch: 18 }, // Verification: Hasil
     { wch: 28 }, // Keterangan
   ];
+
+  // Tinggi baris: header dokumen lebih tinggi, baris data proporsional
+  worksheet["!rows"] = [
+    { hpt: 22 }, // Baris 1
+    { hpt: 18 }, // Baris 2
+    { hpt: 35 }, // Baris 3 — judul besar
+    { hpt: 18 }, // Baris 4
+    { hpt: 8 },  // Baris 5 — spacer
+    { hpt: 22 }, // Baris 6 — header tabel
+    { hpt: 18 }, // Baris 7 — sub-header
+    { hpt: 55 }, // Baris 8 — panduan keterangan (multi-line)
+  ];
+
+  // Freeze panes: bekukan dua baris header tabel (row 5–6 = index 5–6, mulai dari row 8)
+  // Baris 1–8 = metadata + header; data mulai baris 9 (index 8)
+  // Bekukan 8 baris pertama agar selalu terlihat saat scroll
+  worksheet["!freeze"] = { xSplit: 0, ySplit: 8 };
+
+  // Autofilter pada baris header tabel (baris ke-7 = index 6)
+  // Kolom A–J (0–9), baris header ke-7 (index 6)
+  worksheet["!autofilter"] = { ref: "A7:J7" };
+
+  // Pengaturan cetak: orientasi landscape, fit to page width
+  worksheet["!pageSetup"] = {
+    orientation: "landscape",
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    paperSize: 9, // A4
+  };
+
+  // Print title rows (baris 1-8 diulang di setiap halaman cetak)
+  worksheet["!printHeader"] = { start: { r: 0, c: 0 }, end: { r: 7, c: 9 } };
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "FR.SM.TI.033.001");

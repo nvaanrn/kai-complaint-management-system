@@ -321,10 +321,6 @@ export default function DashboardClient({
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onOpenDocModal={() => setIsDocModalOpen(true)}
-        onExportExcel={() => {
-          exportComplaintsToExcel(complaints);
-          showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
-        }}
         onResetSpecialFilters={handleResetSpecialFilters}
       />
 
@@ -501,14 +497,25 @@ export default function DashboardClient({
                 ? (item) => setComplaintToDelete(item)
                 : undefined
             }
-            onExportExcel={
-              currentUser.role !== Role.ADMIN
-                ? () => {
-                    exportComplaintsToExcel(displayedComplaints);
-                    showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
-                  }
-                : undefined
-            }
+            onExportExcel={() => {
+              // Data ekspor difilter sesuai hak akses role:
+              // Admin: semua data yang ditampilkan
+              // PIC: hanya keluhan yang menjadi tanggung jawabnya
+              // Verifikator: data yang ditampilkan (sudah difilter server-side)
+              const exportData =
+                currentUser.role === Role.PIC
+                  ? displayedComplaints.filter(isAssignedToCurrentUser)
+                  : displayedComplaints;
+              exportComplaintsToExcel(exportData, {
+                filenamePrefix:
+                  currentUser.role === Role.PIC
+                    ? `FR_SM_TI_033_001_Tugas_${(currentUser.name || "PIC").replace(/\s+/g, "_")}`
+                    : currentUser.role === Role.VERIFIKATOR
+                    ? "FR_SM_TI_033_001_Verifikasi_Keluhan_KAI"
+                    : "FR_SM_TI_033_001_Keluhan_Pelanggan_KAI",
+              });
+              showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
+            }}
             isAssignedToCurrentUser={isAssignedToCurrentUser}
           />
         </main>
