@@ -67,3 +67,9 @@ prisma/*.db-journal
 # Database Backups
 # ==============================
 backups/
+
+# ==============================
+# Uploaded Files
+# ==============================
+public/uploads/*
+!public/uploads/.gitkeep

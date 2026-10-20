@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import Image from "next/image";
-import { loginWithSupabase } from "@/app/actions/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,10 +18,14 @@ export default function LoginPage() {
     setErrorMsg("");
 
     try {
-      const result = await loginWithSupabase({ email, password });
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password: password.trim(),
+        redirect: false,
+      });
 
-      if (!result.success) {
-        setErrorMsg(result.error || "Gagal masuk ke sistem.");
+      if (result?.error) {
+        setErrorMsg("Email atau kata sandi tidak sesuai. Silakan periksa kembali.");
       } else {
         router.push("/dashboard");
         router.refresh();

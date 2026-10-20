@@ -122,4 +122,174 @@
   - [x] Pembuatan script [scripts/backup-db.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/scripts/backup-db.ts) dan perintah `npm run db:backup` untuk mengekspor snapshot data seluruh tabel (`User`, `Complaint`, `Verification`, `Document`) secara instan.
   - [x] Penyimpanan otomatis berkas snapshot bertimestamp ke folder `backups/` (sudah dimasukkan ke `.gitignore`).
 
+---
 
+## 🐬 Fase 5: Migrasi ke MySQL (XAMPP) + NextAuth + Cloudinary
+
+- [x] **Pembersihan Dependensi & Arsitektur Supabase:**
+  - [x] Uninstall paket `@supabase/ssr`, `@supabase/supabase-js`, dan `supabase` CLI.
+  - [x] Hapus direktori `src/lib/supabase/` dan `supabase/migrations/`.
+  - [x] Pasang paket `next-auth@4` dan `cloudinary`.
+- [x] **Konfigurasi Autentikasi NextAuth.js:**
+  - [x] Route handler NextAuth: [src/app/api/auth/[...nextauth]/route.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/api/auth/[...nextauth]/route.ts) dengan bcrypt dan peran KAI (Admin, PIC, Verifikator).
+  - [x] Penggantian session resolver [src/lib/auth.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/lib/auth.ts) (`getCurrentUser()`, `requireUser()`).
+  - [x] Middleware proteksi rute [src/middleware.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/middleware.ts) berbasis NextAuth.
+  - [x] Halaman login [src/app/login/page.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/login/page.tsx) dan [src/components/LogoutButton.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/LogoutButton.tsx).
+- [x] **Refactoring Query & Storage ke MySQL:**
+  - [x] Konfigurasi provider `mysql` dan ID `uuid()` pada [prisma/schema.prisma](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/schema.prisma).
+  - [x] Konversi seluruh query di [src/app/actions/complaints.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/actions/complaints.ts) dan [src/app/dashboard/page.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/dashboard/page.tsx) ke Prisma Client.
+  - [x] Penyediaan endpoint upload Cloudinary [src/app/api/upload/route.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/api/upload/route.ts) dan [src/lib/cloudinary.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/lib/cloudinary.ts).
+  - [x] Pengalihan upload foto bukti di [src/components/DashboardClient.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/DashboardClient.tsx) ke endpoint `/api/upload`.
+  - [x] Pembersihan sinkronisasi Supabase di [prisma/seed.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/seed.ts) dan adaptasi [scripts/backup-db.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/scripts/backup-db.ts) ke Prisma.
+  - [x] Konfigurasi koneksi MySQL di [.env](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/.env) (`DATABASE_URL="mysql://root:@localhost:3306/spkp_kai"`).
+- [x] **Migrasi & Seeding Database MySQL (XAMPP):**
+  - [x] Pembuatan database `spkp_kai` di MySQL XAMPP.
+  - [x] Eksekusi `npx prisma migrate dev --name init_mysql`.
+  - [x] Eksekusi `npx prisma db seed`.
+  - [x] Uji coba script pencadangan database MySQL (`npm run db:backup`).
+- [x] **Uji Fungsionalitas & Validasi QA End-to-End (Browser Subagent):**
+  - [x] Autentikasi kredensial NextAuth (`admin@spkp.kai.id` / `password123`) berhasil validasi password bcrypt dari MySQL.
+  - [x] Redirect mulus ke `/dashboard` dengan role badge `ADMIN` ("Administrator SPKP").
+  - [x] Data tabel keluhan dari MySQL XAMPP (`CMP-2026-001`, `CMP-2026-002`, `CMP-2026-003`) tampil akurat.
+  - [x] Modal detail keluhan interaktif dapat dibuka dan ditutup dengan data lengkap.
+- [x] **Revisi Fungsionalitas Role Admin & Redesain Dashboard:**
+  - [x] Sembunyikan tombol ekspor Excel (`.xlsx`) di sidebar dan toolbar khusus untuk role Admin.
+  - [x] Hilangkan indikator deadline/tenggat waktu SLA pengerjaan PIC dari kolom status tabel dan modal detail keluhan.
+  - [x] Ubah tema sidebar ke **Dark Executive Navy** (`bg-slate-900`) dengan kontras aksen oranye dan biru khas KAI.
+  - [x] Restrukturisasi form *"Catat Keluhan Baru"* menjadi format **vertikal satu kolom** yang lega dan nyaman diisi.
+  - [x] Integrasikan grafik *"Analisis Saluran"* eksklusif pada menu **Ringkasan & Metrik**, sehingga menu Daftar Keluhan dan Verifikasi Mutu lebih ringkas dan fokus.
+
+---
+
+## 🚫 FASE: Penghapusan Menyeluruh Fitur SLA (Selesai ✅)
+
+- [x] **Audit Kode & Skema Database:**
+  - [x] Audit menyeluruh seluruh direktori proyek untuk mendeteksi dependensi SLA (model Prisma, service, komponen UI, filter, overview metrics, dan test suites).
+- [x] **Pembersihan Database & Skema Prisma:**
+  - [x] Penghapusan model `SlaPolicy` dan enum `SlaCalendarType` dari [prisma/schema.prisma](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/schema.prisma).
+  - [x] Penghapusan kolom snapshot SLA (`slaTargetHours`, `slaCalendarType`, `slaPolicyId`) dan foreign key relasi dari model `Complaint`.
+  - [x] Pembuatan berkas migrasi baru [prisma/migrations/20261018061500_remove_sla_features/migration.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/migrations/20261018061500_remove_sla_features/migration.sql) dan deployment database aman tanpa data reset.
+  - [x] Penghapusan seeding `SlaPolicy` dari [prisma/seed.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/seed.ts).
+- [x] **Pembersihan Backend & Types:**
+  - [x] Penghapusan modul perhitungan SLA `src/lib/sla.ts`.
+  - [x] Penghapusan tipe data SLA (`SlaCalendarType`, `SlaPolicyData`, field SLA `ComplaintData`) dari [src/types/database.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/types/database.ts).
+  - [x] Pembersihan logika snapshot SLA pada fungsi `createComplaint` di [src/app/actions/complaints.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/actions/complaints.ts).
+- [x] **Pembersihan Antarmuka Pengguna (UI/UX):**
+  - [x] Penghapusan komponen `src/components/dashboard/SlaBadge.tsx`.
+  - [x] Pembersihan kartu risiko SLA, metrik kepatuhan SLA, dan tombol filter risiko SLA pada [AdminOverview.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/AdminOverview.tsx).
+  - [x] Penyesuaian KPI PIC menjadi 4 metrik independen operasional (Tugas Aktif, Perlu Revisi, Menunggu Review, Selesai) pada [PicOverview.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/PicOverview.tsx).
+  - [x] Penyesuaian KPI Verifikator (Antrean Verifikasi, Proses Lapangan, Telah Disetujui, Total Revisi Diminta) pada [VerifierOverview.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/VerifierOverview.tsx).
+  - [x] Penghapusan filter dropdown SLA, kolom "Status & SLA" menjadi "Status", dan render badge SLA pada [ComplaintTable.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/ComplaintTable.tsx).
+  - [x] Pembersihan tampilan badge SLA pada [ComplaintDetailModal.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/dashboard/ComplaintDetailModal.tsx).
+  - [x] Pembersihan state dan handlers filter SLA pada [DashboardClient.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/DashboardClient.tsx).
+- [x] **Pembersihan Pengujian (Tests) & Verifikasi QA:**
+  - [x] Penghapusan test suite `tests/sla.test.ts`.
+  - [x] Penyesuaian test suite [tests/ui_dashboard_phase6.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/ui_dashboard_phase6.test.ts) dan [tests/e2e_security_release.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/e2e_security_release.test.ts) (84 tests lulus 100%).
+  - [x] Verifikasi TypeScript (`tsc --noEmit`), ESLint (`next lint`), dan Next.js production build (`next build`) lulus tanpa error.
+
+---
+
+## 📑 FASE: Perbaikan Snapshot dan Arsip Dokumen KAI (Selesai ✅)
+
+- [x] **Audit & Pemisahan Penerbitan dari Aksi Baca (Print & PDF):**
+  - [x] Audit implementasi [src/app/actions/complaints.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/actions/complaints.ts), [src/components/KaiDocumentModal.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/KaiDocumentModal.tsx), [src/components/KaiDocumentView.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/KaiDocumentView.tsx), dan [src/components/pdf/KaiDocumentPdf.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/pdf/KaiDocumentPdf.tsx).
+  - [x] Memastikan tombol Print dan Unduh PDF tidak memicu mutasi atau penerbitan ulang (hanya membaca snapshot beku arsip).
+  - [x] Pemisahan ketat proses penerbitan resmi (`createDocumentBatch`) sebagai mutasi tersendiri yang membekukan keluhan terverifikasi ke dalam `snapshotData`.
+- [x] **Integritas Snapshot Kebal Ubah (Immutable Snapshot):**
+  - [x] Snapshot menyimpan seluruh informasi rekapitulasi secara mandiri: identitas keluhan, nomor tiket, nama pelanggan, kontak, stasiun/Daop, kategori, uraian keluhan, PIC, tindakan perbaikan, tindakan pencegahan, foto bukti, catatan, status, verifikator, kesimpulan verifikasi, dan nomor siklus.
+  - [x] Perubahan data keluhan aktif di database tidak mempengaruhi snapshot arsip dokumen yang telah diterbitkan.
+  - [x] Perlindungan penimpaan dokumen: dokumen yang sudah diterbitkan tidak boleh ditimpa atau dihapus.
+- [x] **Mekanisme Dokumen Revisi (Revision Lineage):**
+  - [x] Dukungan rantai revisi dokumen: dokumen baru dapat merevisi dokumen sebelumnya dengan `parentDocumentId`, `revisionReason`, dan increment `revisionNumber`.
+  - [x] Dokumen lama otomatis ditandai sebagai `SUPERSEDED` dan arsip aslinya tetap utuh untuk kebutuhan audit.
+  - [x] Mode revisi interaktif di UI [src/components/KaiDocumentModal.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/KaiDocumentModal.tsx).
+- [x] **Pencegahan Bentrok Nomor Dokumen & Concurrency-Safe Counter:**
+  - [x] Model `DocumentCounter` di [prisma/schema.prisma](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/schema.prisma) untuk menghasilkan nomor dokumen atomik per bulan dan tahun (`FR.SM/TI/033.001/MM-YYYY`).
+  - [x] Migrasi aman [prisma/migrations/20261018064500_add_document_counter/migration.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/migrations/20261018064500_add_document_counter/migration.sql) tanpa reset database atau penghapusan data arsip historis.
+  - [x] Jaminan dua transaksi penerbitan bersamaan (konkuren) tidak akan menghasilkan nomor dokumen yang sama.
+- [x] **Penyempurnaan Lookup & Proteksi Data Historis:**
+  - [x] Fungsi `getPublishedDocument` kini mendukung query berdasarkan `id` unik dokumen maupun `documentNumber`, mencegah ambiguitas jika terdapat nomor serupa.
+  - [x] Penanganan aman dokumen lama yang belum memiliki snapshot: UI tidak mengarang atau mencampur data keluhan terkini ke arsip lama.
+- [x] **Pengujian Komprehensif (92 Tests Lulus 100%):**
+  - [x] Penambahan test suite validasi transaksi, konkurensi, snapshot immutability, dan rantai revisi di [tests/kai_document_print_pdf.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/kai_document_print_pdf.test.ts).
+  - [x] Seluruh 7 test files (92 tests) lulus 100%.
+  - [x] TypeScript compiler (`tsc --noEmit`), ESLint (`next lint`), dan Next.js production build (`next build`) lulus tanpa peringatan atau error.
+
+---
+
+## 🔐 Fase 4: Penguatan Hak Akses PIC dan Persetujuan Reopen (Selesai ✅)
+
+- [x] **Audit Menyeluruh Hak Akses:**
+  - [x] Identifikasi Admin override ilegal pada `canExecuteComplaint`, `SAVE_PROGRESS` state machine, dan `updateComplaintProgress` server action.
+  - [x] Identifikasi celah self-approval pada `reviewReopenRequest`.
+
+- [x] **Perbaikan `permissions.ts` — `canExecuteComplaint`:**
+  - [x] Hapus baris `if (user.role === Role.ADMIN) return true` yang membolehkan Admin override tindakan penanganan PIC.
+  - [x] Hanya PIC yang ditugaskan yang dapat mengeksekusi keluhan (separation of duties).
+
+- [x] **Perbaikan `state-machine.ts` — Aksi `SAVE_PROGRESS`:**
+  - [x] Guard diubah dari `!== PIC && !== ADMIN` menjadi hanya `!== PIC`.
+  - [x] Admin tidak lagi dapat menyimpan progres penanganan atas nama PIC.
+
+- [x] **Perbaikan `complaints.ts` — `updateComplaintProgress`:**
+  - [x] Guard awal diubah menjadi hanya `Role.PIC` — Admin mendapat HTTP 403 FORBIDDEN.
+  - [x] Ownership check diubah dari `if (user.role === Role.PIC && complaint.picId !== user.id)` menjadi `if (complaint.picId !== user.id)` tanpa pengecualian role — sehingga tidak ada celah lewat manipulasi endpoint langsung.
+
+- [x] **Perbaikan `complaints.ts` — `reviewReopenRequest` (Self-Approval Prevention):**
+  - [x] Tambah guard: jika `reopenReq.requestedById === user.id`, lempar error "Pemohon tidak dapat menyetujui permohonan yang diajukan sendiri."
+  - [x] Menerapkan four-eyes principle pada alur reopen: pengaju dan peninjau harus orang berbeda.
+  - [x] Status PENDING dicek di dalam transaksi sebelum diproses — mencegah dua Admin menyetujui permohonan yang sama secara bersamaan (konkurensi aman).
+
+- [x] **Dokumentasi Matriks Hak Akses (Final):**
+  | Aksi | Admin | PIC (Ditugaskan) | PIC (Lain) | Verifikator |
+  |------|-------|-----------------|-----------|-------------|
+  | Buat keluhan | ✅ | ❌ | ❌ | ❌ |
+  | Tetapkan/ganti PIC | ✅ | ❌ | ❌ | ❌ |
+  | Simpan progres (SAVE_PROGRESS) | ❌ | ✅ | ❌ | ❌ |
+  | Ajukan verifikasi | ❌ | ✅ | ❌ | ❌ |
+  | Verifikasi / Setujui / Tolak | ❌ | ❌ | ❌ | ✅ |
+  | Hapus keluhan | ✅ | ❌ | ❌ | ❌ |
+  | Terbitkan dokumen | ✅ | ❌ | ❌ | ❌ |
+  | Ajukan reopen | ✅ | ❌ | ❌ | ✅ |
+  | Setujui/tolak reopen (bukan pemohon sendiri) | ✅ | ❌ | ❌ | ❌ |
+
+- [x] **Pengujian — Suite Baru `tests/fase4_rbac_reopen.test.ts` (35 Tests):**
+  - [x] PIC mengubah keluhan yang ditugaskan kepadanya (diizinkan).
+  - [x] PIC tidak dapat mengubah keluhan PIC lain (ditolak).
+  - [x] Admin tidak dapat menyimpan progres atas nama PIC (ditolak di permissions + state machine).
+  - [x] Verifikator tidak dapat menjalankan aksi PIC (ditolak).
+  - [x] Pemohon reopen tidak dapat menyetujui permohonannya sendiri (ditolak).
+  - [x] Reopen disetujui: status DALAM_PENANGANAN, PIC tetap sama, completedAt = null.
+  - [x] Reopen ditolak: status TERVERIFIKASI tidak berubah, rekaman histori tersimpan.
+  - [x] Dua Admin tidak dapat memproses reopen yang sama bersamaan (status guard atomik).
+  - [x] Semua pemanggilan endpoint tunduk pada pemeriksaan otorisasi berlapis.
+- [x] **Pembaruan `tests/auth_rbac.test.ts`:**
+  - [x] Ganti test "Admin memiliki hak override" dengan test "Admin TIDAK memiliki hak override eksekusi penanganan (separation of duties — Fase 4)".
+- [x] **Hasil Akhir: 127 tests lulus 100% — TypeScript clean — 8 test files.**
+
+---
+
+## 📚 Fase 5: Sinkronisasi Dokumentasi dan Pengujian Regresi SPKP (Selesai ✅)
+
+- [x] **Audit Dokumentasi Menyeluruh:**
+  - [x] `docs/aturan-sla.md`: Dihapus secara permanen dari repository karena fitur SLA telah dihapus menyeluruh.
+  - [x] `README.md`: Dihapus seluruh referensi SLA aktif, diperbarui pohon struktur direktori, dan diselaraskan perintah seed database.
+  - [x] `PRD.md`: Dihapus klausul SLA pada modul PIC & ekspor, diganti aturan pemisahan tugas (*Separation of Duties*) dan ekspor KAI seragam.
+  - [x] `docs/aturan-bisnis.md`: Diperbarui menjadi 5 pilar keputusan bisnis tanpa SLA, matriks kepatuhan kode aktual, dan penuntasan tindak lanjut.
+  - [x] `docs/matriks-hak-akses.md`: Penegasan Admin dilarang simpan progres PIC (tanpa override), penegasan pencegahan *Self-Approval* pada reopen, dan penambahan operasi ekspor Excel seragam & Print/PDF mandiri.
+  - [x] `docs/state-machine.md`: Sinkronisasi diagram FSM, pengetatan guard `SAVE_PROGRESS` khusus PIC, guard *Self-Approval Prevention* pada review reopen, dan penambahan larangan transisi ilegal (*Invariants*).
+  - [x] `docs/arsitektur-skema-database.md`: Sinkronisasi 100% dengan `schema.prisma` aktual (penghapusan model `SlaPolicy` dan kolom SLA, penambahan model counter atomik, dokumentasi snapshot JSON dokumen, dan 5 titik timestamp operasional).
+  - [x] `docs/laporan-pengujian-akhir.md`: Pembaruan laporan pengujian regresi komprehensif berbasis 127 skenario pengujian aktual.
+
+- [x] **Pengujian Regresi Menyeluruh (Regression Suite):**
+  - [x] **Unit & Integration Tests (`npm test`):** 8 test suite files (127 skenario) lulus 100%.
+  - [x] **TypeScript Strict Check (`npx tsc --noEmit`):** 0 error tipe.
+  - [x] **Linting Code Quality (`npm run lint`):** 0 warning, 0 error ESLint.
+  - [x] **Production Bundle Build (`npm run build`):** Sukses mengompilasi 7 rute halaman aplikasi.
+  - [x] **Verifikasi Alur Bisnis Kunci:**
+    - Alur normal: Registrasi &rarr; Penugasan PIC &rarr; Input tindakan & foto bukti &rarr; Verifikasi `APPROVED` &rarr; Penerbitan dokumen arsip.
+    - Alur penolakan (*Rejection Loop*): Verifikasi `REJECTED` &rarr; Tiket kembali ke `DALAM_PENANGANAN` &rarr; Penugasan PIC tetap sama.
+    - Alur reopen (*Four-Eyes Principle*): Permohonan diajukan &rarr; Admin peninjau bukan pemohon sendiri &rarr; Disetujui kembali ke `DALAM_PENANGANAN` (PIC tetap).
+    - Imutabilitas dokumen: `snapshotData` JSON mandiri kebal terhadap perubahan data tiket aktif di masa depan.
+    - Cetak & Unduh PDF: Tersedia di modal dokumen arsip tanpa memicu pembuatan dokumen baru.
+    - Ekspor Excel: Format seragam dengan judul laporan dan kolom resmi KAI di role Admin, PIC, dan Verifikator.
