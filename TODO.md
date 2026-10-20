@@ -267,3 +267,29 @@
   - [x] Ganti test "Admin memiliki hak override" dengan test "Admin TIDAK memiliki hak override eksekusi penanganan (separation of duties — Fase 4)".
 - [x] **Hasil Akhir: 127 tests lulus 100% — TypeScript clean — 8 test files.**
 
+---
+
+## 📚 Fase 5: Sinkronisasi Dokumentasi dan Pengujian Regresi SPKP (Selesai ✅)
+
+- [x] **Audit Dokumentasi Menyeluruh:**
+  - [x] `docs/aturan-sla.md`: Dihapus secara permanen dari repository karena fitur SLA telah dihapus menyeluruh.
+  - [x] `README.md`: Dihapus seluruh referensi SLA aktif, diperbarui pohon struktur direktori, dan diselaraskan perintah seed database.
+  - [x] `PRD.md`: Dihapus klausul SLA pada modul PIC & ekspor, diganti aturan pemisahan tugas (*Separation of Duties*) dan ekspor KAI seragam.
+  - [x] `docs/aturan-bisnis.md`: Diperbarui menjadi 5 pilar keputusan bisnis tanpa SLA, matriks kepatuhan kode aktual, dan penuntasan tindak lanjut.
+  - [x] `docs/matriks-hak-akses.md`: Penegasan Admin dilarang simpan progres PIC (tanpa override), penegasan pencegahan *Self-Approval* pada reopen, dan penambahan operasi ekspor Excel seragam & Print/PDF mandiri.
+  - [x] `docs/state-machine.md`: Sinkronisasi diagram FSM, pengetatan guard `SAVE_PROGRESS` khusus PIC, guard *Self-Approval Prevention* pada review reopen, dan penambahan larangan transisi ilegal (*Invariants*).
+  - [x] `docs/arsitektur-skema-database.md`: Sinkronisasi 100% dengan `schema.prisma` aktual (penghapusan model `SlaPolicy` dan kolom SLA, penambahan model counter atomik, dokumentasi snapshot JSON dokumen, dan 5 titik timestamp operasional).
+  - [x] `docs/laporan-pengujian-akhir.md`: Pembaruan laporan pengujian regresi komprehensif berbasis 127 skenario pengujian aktual.
+
+- [x] **Pengujian Regresi Menyeluruh (Regression Suite):**
+  - [x] **Unit & Integration Tests (`npm test`):** 8 test suite files (127 skenario) lulus 100%.
+  - [x] **TypeScript Strict Check (`npx tsc --noEmit`):** 0 error tipe.
+  - [x] **Linting Code Quality (`npm run lint`):** 0 warning, 0 error ESLint.
+  - [x] **Production Bundle Build (`npm run build`):** Sukses mengompilasi 7 rute halaman aplikasi.
+  - [x] **Verifikasi Alur Bisnis Kunci:**
+    - Alur normal: Registrasi &rarr; Penugasan PIC &rarr; Input tindakan & foto bukti &rarr; Verifikasi `APPROVED` &rarr; Penerbitan dokumen arsip.
+    - Alur penolakan (*Rejection Loop*): Verifikasi `REJECTED` &rarr; Tiket kembali ke `DALAM_PENANGANAN` &rarr; Penugasan PIC tetap sama.
+    - Alur reopen (*Four-Eyes Principle*): Permohonan diajukan &rarr; Admin peninjau bukan pemohon sendiri &rarr; Disetujui kembali ke `DALAM_PENANGANAN` (PIC tetap).
+    - Imutabilitas dokumen: `snapshotData` JSON mandiri kebal terhadap perubahan data tiket aktif di masa depan.
+    - Cetak & Unduh PDF: Tersedia di modal dokumen arsip tanpa memicu pembuatan dokumen baru.
+    - Ekspor Excel: Format seragam dengan judul laporan dan kolom resmi KAI di role Admin, PIC, dan Verifikator.

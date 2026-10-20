@@ -8,9 +8,9 @@
 
 ## 📌 Ringkasan Proyek
 
-**SPKP (Sistem Penanganan Keluhan Pelanggan)** adalah aplikasi web internal PT Kereta Api Indonesia (Persero) yang dirancang untuk mendokumentasikan, mengoordinasikan penugasan PIC operasional, memantau batas waktu respon (SLA), dan memverifikasi mutu penyelesaian keluhan pelanggan dari berbagai saluran resmi KAI (Access by KAI, Contact Center 121, Media Sosial, Loket Stasiun, dll).
+**SPKP (Sistem Penanganan Keluhan Pelanggan)** adalah aplikasi web internal PT Kereta Api Indonesia (Persero) yang dirancang untuk mendokumentasikan, mengoordinasikan penugasan PIC operasional, mencatat tindakan perbaikan/pencegahan beserta bukti foto fisik lapangan, dan memverifikasi mutu penyelesaian keluhan pelanggan dari berbagai saluran resmi KAI (Access by KAI, Contact Center 121, Media Sosial, Loket Stasiun, dll).
 
-Sistem ini menerapkan **Pemisahan Tiga Peran (*Three-Tier Role Separation*)** secara ketat, kepatuhan *Four-Eyes Principle* dalam pengendalian mutu, serta kemampuan penerbitan berkas rekapitulasi cetak/PDF resmi berstandar KAI (`FR.SM/TI/033.001`).
+Sistem ini menerapkan **Pemisahan Tiga Peran (*Three-Tier Role Separation*)** secara ketat, kepatuhan *Four-Eyes Principle* dalam pengendalian mutu, penerbitan dokumen rekapitulasi audit kebal ubah (*Immutable Snapshot*), pencetakan dan unduh PDF resmi berstandar KAI (`FR.SM/TI/033.001`), serta ekspor spreadsheet Excel seragam di seluruh role.
 
 ---
 
@@ -18,9 +18,9 @@ Sistem ini menerapkan **Pemisahan Tiga Peran (*Three-Tier Role Separation*)** se
 
 | Role | Identitas Aktor | Tanggung Jawab & Wewenang |
 | :--- | :--- | :--- |
-| **`ADMIN`** | Customer Service / Pengelola Sistem | • Mencatat registrasi keluhan baru yang masuk.<br>• **Menentukan penugasan PIC** sesuai jenis keluhan.<br>• Mengelola data pokok registrasi dan memonitor dashboard operasional.<br>• Menyetujui atau menolak permohonan pembukaan kembali (*reopen*) keluhan.<br>• Menerbitkan dokumen laporan resmi cetak/PDF (`FR.SM/TI/033.001`).<br>• **Dilarang melakukan verifikasi mutu keluhan** (*Four-Eyes Principle*). |
+| **`ADMIN`** | Customer Service / Pengelola Sistem | • Mencatat registrasi keluhan baru yang masuk.<br>• **Menentukan penugasan PIC** dan mengelola data pokok registrasi.<br>• Memonitor overview dashboard operasional.<br>• Menyetujui atau menolak permohonan pembukaan kembali (*reopen*) keluhan dengan proteksi *Self-Approval Prevention*.<br>• Menerbitkan dokumen laporan resmi cetak/PDF (`FR.SM/TI/033.001`) dengan snapshot data beku.<br>• **Dilarang melakukan verifikasi mutu keluhan** (*Four-Eyes Principle*).<br>• **Dilarang menyimpan progres penanganan atas nama PIC** (*Separation of Duties*). |
 | **`PIC`** | Petugas Lapangan / Unit Kerja Terkait | • Melihat seluruh keluhan yang ada di dalam sistem untuk transparansi operasional.<br>• Memiliki filter cepat **"Tugas Saya"**.<br>• **Hanya berwenang mengeksekusi keluhan yang ditugaskan kepada dirinya** (`picId === user.id`).<br>• Mendokumentasikan **Tindakan Perbaikan (*Corrective Action*)** dan **Tindakan Pencegahan (*Preventive Action*)**.<br>• **Mengunggah foto bukti hasil perbaikan lapangan ke Cloudinary** sebelum mengajukan verifikasi.<br>• Mengajukan hasil penanganan ke tahap verifikasi (*Submit for Verification*). |
-| **`VERIFIKATOR`** | Tim Kendali Mutu / Quality Assurance | • Memeriksa keabsahan dan efektivitas tindakan penanganan serta foto bukti fisik lapangan dari PIC.<br>• **Pemegang wewenang eksklusif** untuk memberikan keputusan: **Disetujui (*Approved*)** atau **Ditolak (*Rejected*)**.<br>• Wajib menyertakan catatan evaluasi/alasan penolakan jika keluhan dikembalikan ke PIC untuk perbaikan ulang. |
+| **`VERIFIKATOR`** | Tim Kendali Mutu / Quality Assurance | • Memeriksa keabsahan dan efektivitas tindakan penanganan serta foto bukti fisik lapangan dari PIC.<br>• **Pemegang wewenang eksklusif** untuk memberikan keputusan: **Disetujui (*Approved*)** atau **Ditolak (*Rejected*)**.<br>• Wajib menyertakan catatan evaluasi/alasan penolakan jika keluhan dikembalikan ke PIC untuk perbaikan ulang (*Rejection Loop*). |
 
 ---
 
@@ -44,15 +44,15 @@ stateDiagram-v2
 
 ## 🛠️ Arsitektur & Teknologi Aktual
 
-- **Frontend & App Framework:** [Next.js 14](https://nextjs.org/) (App Router, Server Components & Server Actions)
+- **Frontend & App Framework:** [Next.js 14](https://nextjs.org/) (v14.2.15, App Router, Server Components & Server Actions)
 - **UI Library & Styling:** [React 18](https://react.dev/), [Tailwind CSS v3](https://tailwindcss.com/)
-- **Autentikasi & Keamanan:** [NextAuth.js v4](https://next-auth.js.org/) (Credentials Provider, Password Hash via `bcryptjs`, JWT Session maxAge 8 jam, Protected Middleware)
+- **Autentikasi & Keamanan:** [NextAuth.js v4](https://next-auth.js.org/) (Credentials Provider, Password Hash via `bcryptjs`, JWT Session, Protected Middleware)
 - **Penyimpanan Berkas Foto Bukti:** [Cloudinary](https://cloudinary.com/) (Folder: `spkp-kai/proof-images`, upload via buffer stream, kompresi otomatis)
-- **Database & ORM:** [MySQL](https://www.mysql.com/) (Database: `spkp_kai`) & [Prisma ORM v5](https://www.prisma.io/)
-- **Dokumen & PDF Export:** [@react-pdf/renderer](https://react-pdf.org/) (Format presisi A4 Landscape standar KAI `FR.SM/TI/033.001`)
-- **Excel Export:** [SheetJS (xlsx)](https://docs.sheetjs.com/) (Rekapitulasi spreadsheet operasional)
-- **Pengujian (Testing):** [Vitest](https://vitest.dev/) (Unit tests untuk RBAC, Validasi Form, SLA, Nomor Keluhan)
-- **Bahasa Pemrograman:** [TypeScript](https://www.typescriptlang.org/) (Strict Mode)
+- **Database & ORM:** [MySQL](https://www.mysql.com/) (Database: `spkp_kai`) & [Prisma ORM v5](https://www.prisma.io/) (v5.22.0)
+- **Dokumen & PDF Export:** [@react-pdf/renderer](https://react-pdf.org/) (Format presisi A4 Landscape standar KAI `FR.SM/TI/033.001`, Print & Unduh PDF langsung tanpa penerbitan ulang)
+- **Excel Export:** [SheetJS (xlsx)](https://docs.sheetjs.com/) (Rekapitulasi spreadsheet operasional seragam di semua role dengan filter data kontekstual)
+- **Pengujian (Testing):** [Vitest](https://vitest.dev/) (8 test suites, 127 skenario pengujian unit & integrasi untuk RBAC, State Machine, Snapshot Immutability, Reopen, dan Validasi)
+- **Bahasa Pemrograman:** [TypeScript](https://www.typescriptlang.org/) (v5, Strict Mode)
 
 ---
 
@@ -61,15 +61,15 @@ stateDiagram-v2
 ```text
 SPKP/
 ├── docs/                       # Dokumentasi spesifikasi & audit teknis
-│   ├── aturan-bisnis.md        # Spesifikasi aturan bisnis resmi
+│   ├── aturan-bisnis.md        # Spesifikasi aturan bisnis resmi terkini
 │   ├── state-machine.md        # Spesifikasi Finite State Machine (FSM)
 │   ├── matriks-hak-akses.md    # Matriks RBAC 3 peran (Admin, PIC, Verifikator)
-│   ├── aturan-sla.md           # Aturan kalkulasi SLA per kategori
-│   ├── arsitektur-skema-database.md # Spesifikasi skema database & relasi
-│   └── audit-awal.md           # Laporan audit komprehensif Fase 1
+│   ├── arsitektur-skema-database.md # Spesifikasi skema database Prisma & MySQL
+│   ├── laporan-pengujian-akhir.md   # Laporan audit pengujian & regresi komprehensif
+│   └── audit-awal.md           # Laporan audit komprehensif historis
 ├── prisma/
-│   ├── schema.prisma           # Skema database MySQL (User, Complaint, Verification, SlaPolicy, ReopenRequest, Document, AuditLog)
-│   ├── seed.ts                 # Script seeding master data staf demo, SlaPolicy, dan sample keluhan
+│   ├── schema.prisma           # Skema database MySQL (User, Complaint, Verification, ReopenRequest, Document, AuditLog, Counter)
+│   ├── seed.ts                 # Script seeding master data staf demo dan sample keluhan
 │   └── migrations/             # Berkas migrasi database Prisma Migrate
 ├── scripts/
 │   └── backup-db.ts            # Script backup pencadangan mandiri data ke JSON
@@ -83,22 +83,26 @@ SPKP/
 │   │   ├── login/              # Halaman autentikasi kredensial staf KAI
 │   │   ├── layout.tsx          # Root layout aplikasi
 │   │   └── page.tsx            # Redirect rute landing
-│   ├── components/             # Komponen UI (DashboardClient, KaiDocumentModal, LogoutButton, dll.)
-│   │   └── pdf/                # Komponen renderer dokumen PDF resmi KAI
+│   ├── components/             # Komponen UI (DashboardClient, KaiDocumentModal, KaiDocumentView, dll.)
+│   │   ├── dashboard/          # Komponen dashboard modular (Table, Overview, ActionModal, DetailModal, CreateModal, DeleteModal)
+│   │   └── pdf/                # Komponen renderer dokumen PDF resmi KAI (@react-pdf/renderer)
 │   ├── lib/
 │   │   ├── auth-options.ts     # Konfigurasi NextAuth (Credentials Provider & JWT callbacks)
 │   │   ├── auth.ts             # Auth helpers (getCurrentUser, requireUser)
 │   │   ├── cloudinary.ts       # Inisialisasi Cloudinary SDK
+│   │   ├── complaintNumber.ts  # Generator nomor keluhan berurutan aman konkurensi
+│   │   ├── exportExcel.ts      # Generator ekspor spreadsheet Excel (.xlsx) seragam
 │   │   ├── permissions.ts      # Matriks hak akses & guard RBAC
 │   │   ├── prisma.ts           # PrismaClient singleton
-│   │   ├── sla.ts              # Modul perhitungan audit SLA keluhan
+│   │   ├── state-machine.ts    # Validasi state machine keluhan
 │   │   └── validation.ts       # Modul validasi form input
 │   ├── middleware.ts           # Middleware proteksi rute aplikasi
 │   └── types/                  # Definisi antarmuka TypeScript
-├── tests/                      # Unit test suites (Vitest)
+├── tests/                      # Unit & integration test suites (8 files, 127 tests)
 ├── .env.example                # Template variabel lingkungan aktual
 ├── package.json
 └── README.md
+```
 ```
 
 ---
@@ -140,7 +144,7 @@ CLOUDINARY_API_SECRET="your_api_secret"
 Jalankan migrasi database Prisma dan pengisian data master/demo:
 ```bash
 npx prisma migrate dev
-npx tsx prisma/seed.ts
+npm run db:seed
 ```
 
 ### 5. Menjalankan Server Pengembangan

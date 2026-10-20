@@ -87,26 +87,26 @@ Setiap keluhan pelanggan memiliki siklus hidup status yang tegas:
 - **FR-INPUT-02:** Admin berwenang mengedit detail registrasi keluhan serta mengubah alokasi penugasan PIC sesuai kebutuhan penanganan.
 - **FR-INPUT-03:** Admin berwenang menghapus data keluhan (dengan audit konfirmasi).
 
-### 4.3 Modul Penanganan oleh PIC & SLA (FR-PIC)
+### 4.3 Modul Penanganan oleh PIC (FR-PIC)
 - **FR-PIC-01:** PIC dapat melihat seluruh keluhan yang ada di dalam sistem untuk transparansi operasional, serta dapat memfilter secara khusus tab "Tugas Saya".
-- **FR-PIC-02:** PIC hanya dapat mengeksekusi (mengedit tindakan & mengunggah bukti) pada keluhan yang `picId`-nya sesuai dengan ID pengguna PIC yang sedang login.
+- **FR-PIC-02:** PIC hanya dapat mengeksekusi (mengedit tindakan & mengunggah bukti) pada keluhan yang `picId`-nya sesuai dengan ID pengguna PIC yang sedang login. Admin maupun PIC lain dilarang memanipulasi progres penanganan (*Separation of Duties*).
 - **FR-PIC-03:** PIC dapat menyimpan draf tindakan perbaikan tanpa langsung mengajukan verifikasi (status tetap `DALAM_PENANGANAN`).
-- **FR-PIC-04:** PIC wajib mengunggah foto bukti fisik/hasil perbaikan ke Supabase Storage (`complaint-proofs`).
-- **FR-PIC-05:** PIC dapat mengajukan keluhan untuk verifikasi hanya apabila tindakan perbaikan, tindakan pencegahan, dan foto bukti telah lengkap. Saat diajukan, timestamp `submittedAt` tersimpan otomatis untuk audit SLA.
-- **FR-PIC-06:** Sistem menyajikan badge audit SLA operasional otomatis berbasis target waktu penanganan 24 jam KAI (`SLA Terpenuhi`, `Mendekati Batas SLA`, atau `Overdue`).
+- **FR-PIC-04:** PIC wajib mengunggah foto bukti fisik/hasil perbaikan lapangan ke Cloudinary sebelum dapat mengajukan verifikasi.
+- **FR-PIC-05:** PIC dapat mengajukan keluhan untuk verifikasi hanya apabila tindakan perbaikan, tindakan pencegahan, dan foto bukti telah lengkap. Saat diajukan, timestamp `submittedAt` tersimpan otomatis untuk audit operasional.
+- **FR-PIC-06:** Keputusan penolakan verifikasi secara otomatis mengembalikan keluhan ke status `DALAM_PENANGANAN` dengan penugasan tetap pada PIC yang sama (*Rejection Loop*).
 
 ### 4.4 Modul Verifikasi Mutu (FR-VERIFY)
 - **FR-VERIFY-01:** Verifikator dapat memeriksa rincian tindakan perbaikan, tindakan pencegahan, dan meninjau langsung **foto bukti perbaikan** yang diunggah PIC.
-- **FR-VERIFY-02:** Verifikator dapat menyetujui penanganan (`APPROVED`) sehingga status keluhan menjadi `TERVERIFIKASI`.
-- **FR-VERIFY-03:** Verifikator dapat menolak penanganan (`REJECTED`) dengan kewajiban mengisi alasan/feedback perbaikan.
+- **FR-VERIFY-02:** Verifikator dapat menyetujui penanganan (`APPROVED`) sehingga status keluhan menjadi `TERVERIFIKASI`. Admin dilarang keras melakukan verifikasi (*Four-Eyes Principle*).
+- **FR-VERIFY-03:** Verifikator dapat menolak penanganan (`REJECTED`) dengan kewajiban mengisi alasan/feedback perbaikan secara jelas.
 - **FR-VERIFY-04:** Setiap keputusan verifikasi dicatat secara historis ke tabel `Verification`.
 
 ### 4.5 Modul Ekspor Laporan Resmi PDF & Excel (FR-EXPORT)
-- **FR-EXPORT-01:** Admin/Verifikator dapat memilih keluhan yang berstatus `TERVERIFIKASI` (atau keluhan lainnya) untuk dibundel ke dalam dokumen laporan mutu.
+- **FR-EXPORT-01:** Admin dapat memilih keluhan yang berstatus `TERVERIFIKASI` untuk dibundel ke dalam dokumen laporan mutu dan diterbitkan dengan snapshot beku (*Immutable Snapshot*).
 - **FR-EXPORT-02:** Sistem menggunakan library **`@react-pdf/renderer`** untuk meng-generate dokumen PDF berstandar formulir mutu **FR.SM/TI/033.001** (format A4 Landscape) secara presisi di sisi klien.
-- **FR-EXPORT-03:** Pengguna dapat langsung mengunduh file PDF resmi (`.pdf`) hasil render komponen React-PDF yang mencantumkan kop KAI, tabel keluhan, dan kolom tanda tangan MR & Pelaksana.
-- **FR-EXPORT-04:** Sistem menyediakan ekspor rekapitulasi ke format spreadsheet **Excel (`.xlsx`)** menggunakan SheetJS (`xlsx`) dengan audit SLA dan perapian lebar kolom otomatis untuk arsip administrasi.
-- **FR-EXPORT-05:** Riwayat penerbitan dokumen tersimpan ke tabel `Document` bersama relasi nomor-nomor keluhan yang dibundel.
+- **FR-EXPORT-03:** Seluruh role (Admin, PIC, Verifikator) dapat mencetak dan mengunduh file PDF resmi (`.pdf`) dari dokumen yang sudah terbit tanpa memicu penerbitan dokumen baru.
+- **FR-EXPORT-04:** Sistem menyediakan fitur ekspor rekapitulasi keluhan ke format spreadsheet **Excel (`.xlsx`)** menggunakan SheetJS (`xlsx`) dengan format tabel resmi KAI dan penyesuaian data otomatis berdasarkan role (Admin: semua, PIC: tugasnya, Verifikator: verifikasi).
+- **FR-EXPORT-05:** Riwayat penerbitan dokumen tersimpan ke tabel `Document` bersama relasi nomor-nomor keluhan yang dibundel, rantai revisi, dan salinan snapshot JSON yang kebal perubahan.
 
 ---
 

@@ -1,10 +1,8 @@
 # Spesifikasi Aturan Bisnis — SPKP (Sistem Penanganan Keluhan Pelanggan)
-**PT Kereta Api Indonesia (Persero)**
-
-> **Versi Dokumen:** 1.0.0-Fase2  
-> **Status:** Draft Arsitektur & Analisis Bisnis  
-> **Tanggal:** 2026-10-10  
-> **Referensi Utama:** Hasil Audit Fase 1, SOP Pelayanan Keluhan KAI, Format FR.SM/TI/033.001
+**PT Kereta Api Indonesia (Persero)**> **Versi Dokumen:** 3.0.0-Final  
+> **Status:** Spesifikasi Aturan Bisnis Resmi (Disinkronkan)  
+> **Tanggal:** 2026-10-20  
+> **Referensi Utama:** SOP Pelayanan Keluhan KAI, Format FR.SM/TI/033.001, Kebijakan Tanpa SLA
 
 ---
 
@@ -12,41 +10,38 @@
 
 Sistem Penanganan Keluhan Pelanggan (SPKP) adalah aplikasi operasional internal PT Kereta Api Indonesia (Persero) untuk meregistrasi, menugaskan, menindaklanjuti, memverifikasi, dan mengarsipkan seluruh keluhan penumpang dari berbagai saluran layanan (Access by KAI, Contact Center 121, Media Sosial, Loket/Stasiun, Email).
 
-Dokumen ini memformalkan aturan bisnis menjadi spesifikasi sistematis yang siap ditransformasikan ke skema database, server actions, state machine, dan antarmuka pengguna pada fase implementasi teknis berikutnya.
+Keputusan manajemen KAI menetapkan bahwa **SPKP tidak lagi menggunakan Service Level Agreement (SLA)** untuk mengukur batas waktu respon, keterlambatan, prioritas, atau kepatuhan. Penanganan difokuskan secara murni pada integritas data, mutu penyelesaian fisik, bukti lapangan, akuntabilitas peran, dan arsip dokumen resmi.
 
 ---
 
-## 2. Enam Keputusan Bisnis Pokok (Ground Truth)
+## 2. Lima Pilar Keputusan Bisnis Pokok (Ground Truth)
 
-Berikut adalah 6 pilar keputusan bisnis yang telah disepakati dan menjadi batasan absolut (*invariants*):
+Berikut adalah 5 pilar keputusan bisnis yang menjadi batasan mutlak (*invariants*):
 
-1. **Target SLA Berbeda Sesuai Jenis Keluhan:**
-   Target waktu penyelesaian keluhan tidak lagi seragam 24 jam, melainkan ditentukan secara spesifik berdasarkan klasifikasi/jenis keluhan pelanggan.
-2. **Keluhan Dianggap Selesai Hanya Jika Disetujui Verifikator:**
-   Penanganan PIC yang telah selesai tidak otomatis mengubah status keluhan menjadi selesai. Keluhan resmi berstatus selesai (*resolved*) hanya ketika Verifikator Mutu memberikan persetujuan (*APPROVED*).
-3. **Penolakan Verifikasi Mengembalikan Keluhan ke PIC yang Sama:**
-   Jika hasil penanganan dinilai belum memadai (*REJECTED*), status keluhan kembali ke penanganan aktif dan secara otomatis tetap menjadi tanggung jawab petugas PIC yang sama untuk perbaikan lanjutan.
-4. **Prinsip Empat Mata (Four-Eyes Principle) pada Verifikasi:**
-   Admin dilarang keras melakukan verifikasi keluhan. Wewenang menyetujui atau menolak hasil penanganan hanya dimiliki oleh peran independen, yaitu **VERIFIKATOR**.
-5. **Kekebalan Arsip Dokumen Penerbitan (Immutable Snapshot):**
-   Dokumen rekapitulasi keluhan (format `FR.SM/TI/033.001`) yang telah diterbitkan dikunci permanen sebagai arsip hukum/audit. Segala bentuk perubahan data keluhan di kemudian hari tidak boleh mengubah rekaman arsip dokumen masa lalu.
-6. **Pembukaan Kembali Keluhan (Reopen) Terkontrol:**
-   Keluhan yang sudah berstatus terverifikasi (`TERVERIFIKASI`) dimungkinkan untuk dibuka kembali hanya jika diajukan secara resmi dan disetujui oleh **ADMIN**.
+1. **Keluhan Dianggap Selesai Hanya Jika Disetujui Verifikator (*Four-Eyes Principle*):**
+   Penanganan PIC yang telah selesai tidak otomatis mengubah status keluhan menjadi selesai. Keluhan resmi berstatus selesai (*resolved*) hanya ketika Verifikator Mutu independen memberikan persetujuan (*APPROVED*). Admin dilarang keras melakukan verifikasi mutu penanganan.
+2. **Penolakan Verifikasi Mengembalikan Keluhan ke PIC yang Sama (*Rejection Loop*):**
+   Jika hasil penanganan dinilai belum memadai (*REJECTED*), status keluhan kembali ke `DALAM_PENANGANAN` dan secara otomatis tetap menjadi tanggung jawab petugas PIC yang sama untuk perbaikan lanjutan.
+3. **Pemisahan Peran & Tanggung Jawab (*Separation of Duties*):**
+   - PIC hanya dapat mengeksekusi keluhan yang ditugaskan kepada dirinya (`picId === user.id`).
+   - Admin tidak diperbolehkan menyimpan progres tindakan perbaikan atau mengajukan verifikasi atas nama PIC.
+4. **Kekebalan Arsip Dokumen Penerbitan (*Immutable Snapshot*):**
+   Dokumen rekapitulasi keluhan (format `FR.SM/TI/033.001`) yang telah diterbitkan dikunci permanen sebagai arsip hukum/audit dalam kolom `snapshotData` (JSON). Segala bentuk perubahan data keluhan di kemudian hari tidak mengubah rekaman arsip dokumen masa lalu. Dokumen dapat dicetak (Print) dan diunduh PDF kapan saja tanpa menerbitkan dokumen baru. Koreksi dilakukan melalui mekanisme **Revisi Dokumen Baru** bertingkat.
+5. **Pembukaan Kembali Keluhan (*Reopen*) Terkontrol & Bebas *Self-Approval*:**
+   Keluhan yang sudah berstatus `TERVERIFIKASI` dapat diajukan untuk dibuka kembali oleh Admin atau Verifikator. Persetujuan/penolakan permohonan reopen dilakukan oleh Admin, dengan syarat ketat: **pemohon dilarang menyetujui atau menolak permohonannya sendiri** (*Self-Approval Prevention*).
 
 ---
 
-## 3. Gap Analysis: Kode Aktual vs Keputusan Bisnis
+## 3. Matriks Keselarasan Kode Aktual (Compliance Matrix)
 
-Berdasarkan audit teknis mendalam terhadap kode aktual proyek, ditemukan kesenjangan (*gaps*) antara implementasi saat ini dengan keputusan bisnis:
-
-| No | Aspek Bisnis | Kondisi Kode Aktual | Kesenjangan / Gap | Dampak & Kebutuhan Fase Berikutnya |
-|:---|:---|:---|:---|:---|
-| **G-1** | **Target SLA** | `src/lib/sla.ts` menerapkan target *hardcoded* default 24 jam untuk semua keluhan tanpa membedakan tipe. | Model `Complaint` belum memiliki kolom `category` / `type` (hanya ada kolom `source`). | Perlu penambahan kolom kategori keluhan pada skema dan matriks konfigurasi SLA per kategori. |
-| **G-2** | **Penyelesaian Keluhan** | `verifyComplaint` mengubah status ke `TERVERIFIKASI` saat disetujui. | Sudah selaras dengan Keputusan #2. | Menjaga agar tidak ada aksi client yang dapat melompati verifikasi. |
-| **G-3** | **Penolakan PIC** | `verifyComplaint` mengubah status ke `DALAM_PENANGANAN` tanpa mengubah `picId`. | Sudah selaras dengan Keputusan #3, namun belum ada pencatatan siklus putaran perbaikan (*rework iteration count*). | Perlu pencatatan histori penolakan yang terstruktur agar pelaporan rework terukur. |
-| **G-4** | **Hak Verifikasi** | Guard `user.role === Role.VERIFIKATOR` sudah ditegakkan di `permissions.ts` dan `complaints.ts`. | Sudah selaras dengan Keputusan #4. | UI dan server sudah sinkron. |
-| **G-5** | **Arsip Dokumen** | `createDocumentBatch` hanya mengaitkan `documentId` pada baris tabel `Complaint` secara relasional langsung (*live relation*). | **Kritis:** Jika data keluhan di-update atau PIC diganti, isi dokumen ikut berubah secara dinamis. Tidak ada salinan data historis (*data snapshot/JSON blob*). | Perlu mekanisme *immutable snapshot* (misal: JSON payload tersimpan di tabel `Document` atau tabel pivot `DocumentItemSnapshot`). |
-| **G-6** | **Pembukaan Kembali (Reopen)** | Belum ada model data, enum status, maupun Server Action untuk menangani permintaan *reopen*. | Fitur pembukaan kembali belum tersedia sama sekali di basis kode. | Perlu perancangan arsitektur data untuk entitas `ReopenRequest` atau status transisi khusus. |
+| No | Aspek Bisnis | Status Implementasi Aktual | Mekanisme Penegakan |
+|:---|:---|:---|:---|
+| **C-1** | **Penghapusan Menyeluruh SLA** | **Tuntas 100%** | Seluruh model SLA, target durasi, filter SLA, metrik overdue, dan utility perhitungan telah dihapus dari kode, basis data, dan UI. |
+| **C-2** | **Penyelesaian Keluhan** | **Tuntas 100%** | `verifyComplaint` mengubah status ke `TERVERIFIKASI` saat `APPROVED`. Transisi bypass ditolak di FSM dan Server Action. |
+| **C-3** | **Penolakan PIC** | **Tuntas 100%** | `verifyComplaint` mengubah status ke `DALAM_PENANGANAN` tanpa mengubah `picId`. Rekaman feedback tersimpan di tabel `Verification`. |
+| **C-4** | **Hak Verifikasi** | **Tuntas 100%** | Guard `user.role === Role.VERIFIKATOR` ditegakkan di `permissions.ts`, `state-machine.ts`, dan `complaints.ts`. |
+| **C-5** | **Arsip Dokumen Kebal Ubah** | **Tuntas 100%** | Penerbitan menyimpan salinan `snapshotData` JSON mandiri pada tabel `Document`. Modal cetak & PDF membaca snapshot tanpa mengubah state database. |
+| **C-6** | **Pembukaan Kembali (Reopen)** | **Tuntas 100%** | Entitas `ReopenRequest` terpisah, transisi FSM terkontrol, pencegahan *self-approval*, dan penguncian status PENDING atomik. | |
 
 ---
 
@@ -117,10 +112,11 @@ Berdasarkan audit teknis mendalam terhadap kode aktual proyek, ditemukan kesenja
 
 ---
 
-## 5. Ringkasan Kebutuhan Tindak Lanjut
+## 5. Status Finalisasi Kebijakan Sistem
 
-Sebelum implementasi teknis dilakukan, keputusan mendetail terkait parameter berikut perlu difinalisasi bersama Product Owner/User:
-1. Daftar kategori/jenis keluhan resmi beserta target SLA-nya.
-2. Kebijakan jam operasional SLA (jam kalender 24/7 vs jam kerja operasional).
-3. Titik hitung awal SLA (apakah dari tanggal kejadian tiket vs waktu registrasi sistem).
-4. Penentuan siapa saja role yang berhak mengajukan permohonan pembukaan kembali (Reopen).
+Seluruh parameter operasional telah ditetapkan dan diimplementasikan secara definitif:
+1. **Kebijakan SLA:** Dihapus sepenuhnya dari sistem berdasarkan keputusan final manajemen KAI.
+2. **Pengajuan Reopen:** Diberikan kepada role `ADMIN` dan `VERIFIKATOR`.
+3. **Persetujuan Reopen:** Eksklusif bagi role `ADMIN` dengan penegakan *Four-Eyes Principle* (Admin pemohon dilarang menyetujui permohonannya sendiri).
+4. **Penerbitan & Arsip Dokumen:** Format resmi KAI `FR.SM/TI/033.001` dengan snapshot JSON beku, dukungan Print & Download PDF tanpa re-publish, dan rantai revisi dokumen.
+5. **Penyeragaman Ekspor Excel:** Format spreadsheet seragam berbasis format resmi KAI di semua role dengan filter kontekstual.

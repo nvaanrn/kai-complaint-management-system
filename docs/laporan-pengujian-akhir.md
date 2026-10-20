@@ -1,234 +1,155 @@
-# LAPORAN PENGUJIAN AKHIR, KEAMANAN, DAN KESIAPAN RILIS SPKP KAI
+# LAPORAN PENGUJIAN AKHIR, REGRESI, DAN KESIAPAN SISTEM SPKP KAI
 **Sistem Penanganan Keluhan Pelanggan (SPKP) — PT Kereta Api Indonesia (Persero)**  
 **Standar Pengendalian Mutu Internal: FR.SM/TI/033.001**
 
-> **Tanggal Pelaksanaan:** 14 Oktober 2026  
-> **Peran:** Senior QA Engineer & Release Engineer  
+> **Tanggal Pelaksanaan:** 20 Oktober 2026  
+> **Peran:** QA Engineer & Release Engineer  
 > **Branch Git:** `perbaikan`  
-> **Status Keseluruhan Sistem:** **LULUS UJI — SIAP MENUJU TAHAP PERSIAPAN RILIS (STAGING / PROD)**
+> **Status Keseluruhan Sistem:** **LULUS PENGUJIAN REGRESI MENYELURUH (100% GREEN) — SIAP OPERASIONAL**
 
 ---
 
 ## 1. Ringkasan Eksekutif
 
-Pengujian akhir menyeluruh telah dijalankan untuk memvalidasi stabilitas, integritas data, ketahanan keamanan otorisasi (*Four-Eyes Principle*), kepatuhan SLA dinamis, imutabilitas arsip dokumen, dan kesiapan rilis sistem SPKP setelah penyelesaian seluruh fase perbaikan (Fase 1 s.d. Fase 6).
-
-Pemeriksaan teknis meliputi pengujian unit, integrasi alur bisnis (*end-to-end*), keamanan otorisasi negatif, migrasi skema database, linting kode, type checking TypeScript, dan build bundel produksi Next.js.
-
-### Rekapitulasi Status Pemeriksaan
-
-| Kategori Pengujian / Pemeriksaan | Jumlah Skenario | Status Aktual | Keterangan |
-|---|---|---|---|
-| **Pemeriksaan Tipe TypeScript (`tsc`)** | Seluruh Modul | **LULUS** | 0 error, 100% strict type safety. |
-| **Pemeriksaan Kualitas Kode (ESLint)** | Seluruh Direktori | **LULUS** | 0 warning, 0 error. |
-| **Validasi & Generate Prisma Schema** | Model & Migrasi | **LULUS** | Skema valid, Prisma Client v5.22.0 ter-generate. |
-| **Status Migrasi Database MySQL** | 2 Migrasi Aktif | **LULUS** | Database schema is up to date (`spkp_kai`). |
-| **Test Suite Otomatis (Vitest)** | 7 Suites / 84 Tests | **LULUS (100%)** | 84 skenario sukses, 0 gagal. |
-| **Next.js Production Build (`build`)** | 7 Rute Halaman | **LULUS** | Kompilasi statis dan dinamis sukses. |
-| **Otorisasi Server Actions & RBAC** | 14 Skenario | **LULUS** | Akses ilegal ditolak di level server & transaksi. |
-| **Separation of Duties (Four-Eyes)** | 5 Skenario | **LULUS** | Admin dilarang memverifikasi, PIC dilarang ubah tiket lain. |
-| **SLA & TargetSnapshot Retention** | 8 Skenario | **LULUS** | Target jam per kategori beku, durasi akurat. |
-| **Imutabilitas Dokumen Arsip** | 4 Skenario | **LULUS** | Snapshot beku tidak terpengaruh mutasi data aktif. |
+Audit akhir dan pengujian regresi menyeluruh telah dijalankan pada aplikasi SPKP setelah implementasi serangkaian perbaikan arsitektural:
+1. **Penghapusan Menyeluruh Fitur SLA:** Bebas ketergantungan dari seluruh kode, model database, metrik overview, badge, filter, dan utility.
+2. **Kekebalan Arsip Dokumen KAI (Immutable Snapshot):** Dokumen terbit menyimpan salinan beku data keluhan dalam format JSON (`snapshotData`), mendukung penomoran revisi dokumen, serta pencetakan (Print) dan pengunduhan PDF langsung tanpa memicu penerbitan baru.
+3. **Penyeragaman Fitur Ekspor Excel:** Format tabel profesional selaras standar KAI di seluruh role (Admin, PIC, Verifikator) dengan data tersaring kontekstual.
+4. **Penguatan Hak Akses PIC & Pencegahan Self-Approval Reopen:** Menghapus superuser override Admin pada progres PIC (*Separation of Duties*) dan menegakkan *Four-Eyes Principle* pada permohonan pembukaan kembali keluhan (*Self-Approval Prevention*).
 
 ---
 
-## 2. Inventarisasi dan Status Pengujian Aktual
+## 2. Rekapitulasi Status Pemeriksaan Kualitas & Regresi
 
-Pengujian otomatis dijalankan menggunakan test runner **Vitest** dengan rincian suite sebagai berikut:
+| Kategori Pengujian / Pemeriksaan | Perintah / Alat Uji | Target / Lingkup | Hasil Aktual | Keterangan |
+|---|---|---|---|---|
+| **Pemeriksaan Tipe TypeScript** | `npx tsc --noEmit` | Seluruh Modul Proyek | **LULUS (0 Error)** | Strict mode type-checking 100% aman. |
+| **Pemeriksaan Kualitas Kode (ESLint)** | `npm run lint` (`next lint`) | Seluruh Direktori | **LULUS (0 Warning / 0 Error)** | Standar kode Next.js & React terpenuhi. |
+| **Unit & Integration Tests (Vitest)** | `npm test` (`vitest run`) | 8 File Test Suites | **LULUS (127/127 Tests - 100%)** | Seluruh skenario logika bisnis sukses. |
+| **Kompilasi Bundel Produksi** | `npm run build` (`next build`) | 7 Rute Halaman Aplikasi | **LULUS (Exit Code 0)** | Halaman statis & dinamis ter-generate sempurna. |
+| **Verifikasi Penghapusan SLA** | Audit Kode & Skema Prisma | Seluruh Repository | **LULUS (0 Dependensi)** | Tidak ada import aktif, model, atau kalkulasi SLA. |
+| **Pemisahan Peran (Separation of Duties)** | Test Suite Otorisasi | Admin vs PIC vs Verifikator | **LULUS** | Admin tidak bisa eksekusi tugas PIC; Verifikator independen. |
+| **Pencegahan Self-Approval Reopen** | Test Suite RBAC & Transaksi | Alur Peninjauan Reopen | **LULUS** | Pemohon dilarang menyetujui permohonannya sendiri. |
+| **Imutabilitas Dokumen Arsip** | Test Suite Snapshot | Dokumen FR.SM/TI/033.001 | **LULUS** | Snapshot beku tidak berubah saat data aktif dimutasi. |
+| **Print & Download PDF Mandiri** | UI Modal & React-PDF | Komponen Dokumen KAI | **LULUS** | Print & Download PDF tanpa penerbitan dokumen baru. |
+| **Ekspor Excel Seragam** | Modul `exportExcel.ts` | Admin, PIC, Verifikator | **LULUS** | Layout tabel KAI seragam, filter data otomatis. |
+
+---
+
+## 3. Rincian Hasil Pengujian Test Suite (127 Tests)
+
+Pengujian otomatis dijalankan menggunakan test runner **Vitest** dengan rincian hasil aktual:
 
 ```text
- ✓ tests/fase7_e2e_security_release.test.ts (16 tests)
- ✓ tests/backend_state_machine.test.ts (20 tests)
- ✓ tests/auth_rbac.test.ts (14 tests)
- ✓ tests/validation.test.ts (13 tests)
- ✓ tests/ui_dashboard_phase6.test.ts (12 tests)
- ✓ tests/complaintNumber.test.ts (5 tests)
- ✓ tests/sla.test.ts (4 tests)
+ ✓ tests/validation.test.ts (13 tests) 24ms
+ ✓ tests/auth_rbac.test.ts (14 tests) 14ms
+ ✓ tests/ui_dashboard_phase6.test.ts (9 tests) 15ms
+ ✓ tests/kai_document_print_pdf.test.ts (18 tests) 34ms
+ ✓ tests/backend_state_machine.test.ts (20 tests) 23ms
+ ✓ tests/fase4_rbac_reopen.test.ts (35 tests) 29ms
+ ✓ tests/e2e_security_release.test.ts (13 tests) 26ms
+ ✓ tests/complaintNumber.test.ts (5 tests) 10ms
 
- Test Files  7 passed (7)
-      Tests  84 passed (84)
-   Duration  1.17s
+ Test Files  8 passed (8)
+      Tests  127 passed (127)
+   Duration  1.73s
 ```
 
-### Rincian Per Suite Pengujian
+### Rincian Per Test File:
 
-1. **`tests/fase7_e2e_security_release.test.ts` (16 Skenario — LULUS):**
-   - Siklus hidup normal (Happy Path) dari pembuatan tiket hingga approve dan reopen.
-   - Siklus penolakan (Rejection Loop) dengan retensi penugasan PIC dan pelacakan *cycle counter*.
-   - Larangan Admin memverifikasi (*Four-Eyes Principle*).
-   - Larangan PIC mengeksekusi tiket milik PIC lain (*Ownership Isolation*).
-   - Penolakan mutasi pengguna tanpa autentikasi (*Session Guard*).
-   - Penolakan transisi status ilegal (*State Machine Enforcement*).
-   - Penolakan verifikasi tanpa catatan/alasan.
-   - Proteksi keluhan yang sudah berstatus arsip dari penghapusan (*Document Guard*).
-   - Keunikan nomor keluhan standar KAI (`CMP-YYYY-XXX`).
-   - Perhitungan SLA dengan target snapshot per jenis keluhan (12j, 24j, 48j).
-   - Pengukuran waktu penyelesaian resmi berbasis `completedAt` saat verifikator menyetujui.
-   - Penanganan nilai tanggal invalid / null tanpa throw exception (*Robustness*).
-   - Imutabilitas snapshot dokumen arsip resmi.
-   - Pembatasan penerbitan dokumen audit hanya untuk tiket `TERVERIFIKASI`.
+1. **`tests/fase4_rbac_reopen.test.ts` (35 Skenario — LULUS):**
+   - PIC hanya berwenang mengubah keluhan yang ditugaskan kepadanya.
+   - PIC tidak dapat mengubah progres keluhan milik PIC lain (*Ownership Isolation*).
+   - Admin ditolak saat mencoba menyimpan progres penanganan atau upload bukti atas nama PIC (*Separation of Duties*).
+   - Verifikator ditolak saat mencoba melakukan tindakan teknis PIC.
+   - Admin/Verifikator mengajukan reopen keluhan yang telah terverifikasi.
+   - Pemohon reopen dilarang menyetujui atau menolak permohonannya sendiri (*Self-Approval Prevention*).
+   - Peninjauan reopen yang disetujui: status bertransisi ke `DALAM_PENANGANAN`, `completedAt` direset, penugasan PIC tetap sama.
+   - Peninjauan reopen yang ditolak: status tetap `TERVERIFIKASI`, alasan penolakan tersimpan.
+   - Proteksi konkurensi atomik: dua Admin tidak dapat memproses permohonan reopen yang sama secara bersamaan.
 
 2. **`tests/backend_state_machine.test.ts` (20 Skenario — LULUS):**
-   - Transisi status `BELUM_DITANGANI` &rarr; `DALAM_PENANGANAN` &rarr; `MENUNGGU_VERIFIKASI` &rarr; `TERVERIFIKASI`.
-   - Transisi penolakan `MENUNGGU_VERIFIKASI` &rarr; `DALAM_PENANGANAN`.
-   - Transisi permohonan pembukaan kembali `TERVERIFIKASI` &rarr; `DALAM_PENANGANAN`.
+   - Transisi legal: `BELUM_DITANGANI` &rarr; `DALAM_PENANGANAN` &rarr; `MENUNGGU_VERIFIKASI` &rarr; `TERVERIFIKASI`.
+   - Transisi penolakan mutu: `MENUNGGU_VERIFIKASI` &rarr; `DALAM_PENANGANAN` dengan retensi PIC.
+   - Penolakan lompatan status ilegal (*Invalid Transition Guard*).
 
-3. **`tests/auth_rbac.test.ts` (14 Skenario — LULUS):**
-   - Matriks otorisasi peran Admin, PIC, dan Verifikator pada setiap operasi server.
+3. **`tests/kai_document_print_pdf.test.ts` (18 Skenario — LULUS):**
+   - Pembekuan snapshot JSON keluhan pada saat dokumen diterbitkan (*Immutable Snapshot*).
+   - Mutasi data keluhan aktif setelah terbit tidak mengubah isi snapshot dokumen lama.
+   - Pencetakan (Print) dan pengunduhan PDF membaca langsung dari data snapshot tanpa membuat baris dokumen baru di database.
+   - Rantai revisi dokumen (`revisionNumber` dan `parentDocumentId`).
 
-4. **`tests/validation.test.ts` (13 Skenario — LULUS):**
-   - Validasi nama pelapor (min 3 karakter), deskripsi keluhan (min 10 karakter), validitas saluran KAI resmi, batas tindakan korektif/preventif, dan catatan penolakan.
+4. **`tests/auth_rbac.test.ts` (14 Skenario — LULUS):**
+   - Hak akses pembuatan keluhan khusus Admin.
+   - Penolakan Admin mengeksekusi penanganan PIC (menegaskan aturan baru tanpa superuser override).
+   - Wewenang eksklusif Verifikator untuk menyetujui/menolak penanganan.
 
-5. **`tests/ui_dashboard_phase6.test.ts` (12 Skenario — LULUS):**
-   - Perhitungan metrik overview Admin (tiket belum ditugaskan & risiko SLA).
-   - Filter tugas aktif PIC dan deteksi tiket perlu revisi.
-   - Antrean kritis verifikator.
-   - Logika pagination dan filter multi-dimensi.
+5. **`tests/validation.test.ts` (13 Skenario — LULUS):**
+   - Validasi batas karakter nama pelapor, uraian masalah, saluran KAI resmi, tindakan perbaikan & pencegahan, serta alasan penolakan/reopen.
 
-6. **`tests/complaintNumber.test.ts` (5 Skenario — LULUS):**
-   - Pemformatan nomor keluhan, parsing sequence tahunan, dan penanganan urutan baru.
+6. **`tests/e2e_security_release.test.ts` (13 Skenario — LULUS):**
+   - Siklus komprehensif alur keluhan end-to-end.
+   - Penolakan akses tanpa autentikasi (*Session Guard*).
+   - Integritas nomor keluhan KAI (`CMP-YYYY-XXXX`).
 
-7. **`tests/sla.test.ts` (4 Skenario — LULUS):**
-   - Perhitungan durasi, status Overdue, status Near Deadline (sisa &le; 6 jam), dan status SLA OK.
+7. **`tests/ui_dashboard_phase6.test.ts` (9 Skenario — LULUS):**
+   - Logika pemfilteran dashboard operasional (semua tiket, tugas saya, menunggu verifikasi).
+   - Metrik ringkasan keluhan tanpa dependensi SLA.
 
----
-
-## 3. Cakupan Alur Bisnis yang Telah Diuji
-
-### A. Alur Normal (Happy Path) — [LULUS]
-1. **Registrasi:** Admin mencatat keluhan baru &rarr; Sistem men-generate nomor registrasi terurut &rarr; Status awal `BELUM_DITANGANI`.
-2. **Penugasan PIC:** Admin menugaskan staf PIC teknis &rarr; Status bertransisi ke `DALAM_PENANGANAN` &rarr; Timestamp `assignedAt` dan audit log tercatat.
-3. **Eksekusi Lapangan:** PIC mengisi tindakan perbaikan dan pencegahan &rarr; PIC mengunggah foto bukti fisik via Cloudinary &rarr; PIC mengajukan hasil ke tim mutu.
-4. **Verifikasi Mutu:** Status berubah ke `MENUNGGU_VERIFIKASI` &rarr; Timestamp `submittedAt` tercatat &rarr; Verifikator meninjau bukti fisik dan menyetujui.
-5. **Penyelesaian Final:** Status keluhan berubah menjadi `TERVERIFIKASI` &rarr; Timestamp `completedAt` terisi &rarr; SLA dihitung resmi berbasis `completedAt`.
-6. **Penerbitan Dokumen:** Admin menerbitkan dokumen kendali mutu FR.SM/TI/033.001 &rarr; Data keluhan dibekukan dalam `snapshotData` &rarr; Tiket terhubung permanen ke `documentId`.
-7. **Buka Kembali (Reopen):** Permintaan reopen diajukan dengan alasan jelas &rarr; Admin menyetujui &rarr; Tiket kembali ke status `DALAM_PENANGANAN` dengan **retensi PIC yang sama**.
-
-### B. Alur Penolakan & Revisi Lapangan (Rejection Loop) — [LULUS]
-1. PIC mengajukan hasil penanganan (`MENUNGGU_VERIFIKASI`).
-2. Verifikator memeriksa bukti fisik dan menolak karena bukti belum lengkap.
-3. Alasan penolakan spesifik disimpan ke tabel `Verification` dengan `cycle: 1`.
-4. Status tiket dikembalikan ke `DALAM_PENANGANAN`, sementara **penugasan PIC tidak berubah**.
-5. Di dashboard PIC muncul notifikasi peringatan revisi beserta feedback verifikator.
-6. PIC memperbaiki tindakan, mengunggah bukti baru, dan mengajukan ulang (`cycle: 2`).
-7. Verifikator menyetujui siklus 2 &rarr; Seluruh histori siklus 1 dan 2 tetap tersimpan lengkap.
+8. **`tests/complaintNumber.test.ts` (5 Skenario — LULUS):**
+   - Keunikan format penomoran registrasi, parsing urutan tahunan, dan penanganan urutan baru.
 
 ---
 
-## 4. Pengujian Keamanan & Negatif
+## 4. Bukti Kesiapan Kompilasi Produksi (Next.js Build)
 
-| Skenario Pengujian Negatif | Harapan Sistem | Hasil Aktual | Status |
-|---|---|---|---|
-| Admin mencoba memverifikasi keluhan | Ditolak oleh server (*Four-Eyes Principle*) | `isAllowed: false`, error dilempar | **LULUS** |
-| PIC A mencoba mengubah keluhan milik PIC B | Ditolak (*Ownership Isolation*) | Ditolak di transaksi database | **LULUS** |
-| Akses mutasi tanpa session aktif (null) | Ditolak dengan kode `UNAUTHENTICATED` | Mengembalikan status 401/error sesi | **LULUS** |
-| Verifikator menolak tanpa mengisi feedback | Ditolak (*Validation Error*) | Ditolak sebelum transaksi dibuka | **LULUS** |
-| Upload file non-gambar (misal `.exe` / `.sh`) | Ditolak via validasi *Magic Bytes* | HTTP 400 "Format tidak didukung" | **LULUS** |
-| Upload file ukuran &gt; 5MB | Ditolak via validasi *Max File Size* | HTTP 400 "Ukuran file terlalu besar" | **LULUS** |
-| Hapus keluhan yang sudah masuk dokumen terbit | Ditolak (*Integrity Protection*) | Ditolak karena `documentId` terisi | **LULUS** |
-| Lompatan status ilegal (`BELUM` &rarr; `TERVERIFIKASI`) | Ditolak oleh State Machine | Transisi ditolak, status tetap aman | **LULUS** |
+Perintah `npm run build` dieksekusi dan menghasilkan bundel produksi yang valid:
 
----
+```text
+Route (app)                              Size     First Load JS
+┌ ○ /                                    138 B          87.6 kB
+├ ○ /_not-found                          873 B          88.4 kB
+├ ƒ /api/auth/[...nextauth]              0 B                0 B
+├ ƒ /api/upload                          0 B                0 B
+├ ƒ /dashboard                           121 kB          223 kB
+└ ○ /login                               1.77 kB         104 kB
++ First Load JS shared by all            87.5 kB
 
-## 5. Uji Integritas Database & Penyimpanan
-
-- **Relasi & Foreign Key Constraints:** Relasi antara `Complaint`, `User (PIC)`, `Verification (Verifier)`, `ReopenRequest`, `Document`, dan `AuditLog` terlindungi dengan referensial integritas Prisma/MySQL.
-- **Transaksionalitas (`prisma.$transaction`):** Seluruh mutasi multi-langkah (seperti assign PIC + audit log, verifikasi + audit log, penerbitan dokumen + update tiket) dibungkus transaksi database ACID. Jika salah satu langkah gagal, seluruh perubahan di-rollback secara otomatis tanpa menyisakan relasi setengah jadi.
-- **Penyimpanan Berkas (Cloudinary):** Berkas foto bukti disimpan dengan nama acak yang aman (*sanitized ID*) dan dioptimalkan otomatis (format webp, batas 2048px).
-
----
-
-## 6. Bug yang Ditemukan dan Telah Diperbaiki
-
-1. **Sinkronisasi Pelepasan Penugasan PIC oleh Admin:**
-   - *Masalah:* Saat Admin mengosongkan PIC pada formulir edit, nilai string kosong sebelumnya tidak mengosongkan relasi PIC.
-   - *Solusi:* Diperbaiki dengan mengirimkan nilai `picId: null` secara eksplisit ke fungsi `editComplaintDetails`.
-2. **Validasi Panjang Input Client-Side:**
-   - *Masalah:* Validasi client-side sebelumnya hanya memeriksa string kosong, sementara backend mewajibkan panjang minimum.
-   - *Solusi:* Ditambahkan validasi min-length pada `ComplaintCreateModal` dan `ComplaintActionModal` agar selaras 100% dengan backend.
-3. **Boundary Nilai Pagination:**
-   - *Masalah:* Potensi `startIndex` bernilai negatif jika `validPage` bernilai 0 pada kondisi data kosong.
-   - *Solusi:* Dibungkus dengan proteksi batas `Math.min(Math.max(1, currentPage), totalPages)`.
-4. **Tipe Data targetHours Nullable:**
-   - *Masalah:* Snapshot SLA dari database bertipe `number | null`, sedangkan opsi perhitungan mengharuskan `number | undefined`.
-   - *Solusi:* Diperluas menjadi `targetHours?: number | null` pada `SlaCalculationOptions`.
-
----
-
-## 7. Bug Terbuka & Keterbatasan Lingkungan Saat Ini
-
-| Item | Kategori | Penjelasan & Rekomendasi |
-|---|---|---|
-| **Pembaruan Antarmuka Real-Time Tanpa Refresh** | Keterbatasan (Minor) | Saat ini sinkronisasi UI antar pengguna bergantung pada `router.refresh()` setelah aksi pengguna selesai. Belum menggunakan WebSocket/SSE. Disarankan untuk implementasi fitur notifikasi push pada pengembangan lanjutan. |
-| **Penyimpanan Lokal untuk Bukti Offline** | Keterbatasan (Minor) | Upload berkas bergantung pada konektivitas Cloudinary. Jika koneksi internet terputus, unggahan bukti gagal. Disarankan mempertimbangkan penyimpanan lokal sementara (*offline fallback*) jika stasiun terpencil mengalami kendala internet. |
-
----
-
-## 8. Panduan & Checklist Persiapan Deployment
-
-### A. Environment Variables Wajib (`.env`)
-
-Pastikan variabel lingkungan berikut telah dikonfigurasi pada server target sebelum menjalankan aplikasi:
-
-```env
-# 1. Database MySQL Produksi
-DATABASE_URL="mysql://DB_USER:DB_PASSWORD@DB_HOST:3306/spkp_kai"
-
-# 2. NextAuth.js
-NEXTAUTH_URL="https://spkp.kai.id"
-NEXTAUTH_SECRET="<generate-menggunakan-openssl-rand-base64-32>"
-
-# 3. Cloudinary CDN Storage
-CLOUDINARY_CLOUD_NAME="<nama-cloud-produksi>"
-CLOUDINARY_API_KEY="<api-key-produksi>"
-CLOUDINARY_API_SECRET="<api-secret-produksi>"
+ƒ Middleware                             50.3 kB
 ```
 
-### B. Urutan Langkah Deployment Staging / Produksi
-
-1. **Pull Kode Sumber:**
-   ```bash
-   git checkout main (atau perbaikan)
-   git pull origin main
-   ```
-2. **Instalasi Dependensi Bersih:**
-   ```bash
-   npm ci
-   ```
-3. **Generate Prisma Client:**
-   ```bash
-   npx prisma generate
-   ```
-4. **Terapkan Migrasi Database (Tanpa Reset):**
-   ```bash
-   npx prisma migrate deploy
-   ```
-5. **Jalankan Seed Akun Pengguna Awal (Jika Database Baru):**
-   ```bash
-   npm run db:seed
-   ```
-6. **Kompilasi Bundel Produksi:**
-   ```bash
-   npm run build
-   ```
-7. **Jalankan Layanan Aplikasi:**
-   ```bash
-   npm run start
-   ```
-
-### C. Prosedur Backup & Pemulihan Database
-
-- **Backup Otomatis:** Telah disediakan script `npm run db:backup` (`scripts/backup-db.ts`) untuk mencadangkan database MySQL ke format `.sql`.
-- **Jadwal Rekomendasi:** Jalankan backup terjadwal (cron job) setiap hari pukul 01:00 WIB.
+- Kompilasi berhasil tanpa peringatan ESLint atau TypeScript compiler error.
+- Seluruh rute aman dan terproteksi middleware otentikasi NextAuth.js.
 
 ---
 
-## 9. Kesimpulan & Rekomendasi Rilis
+## 5. Dokumentasi yang Diperbarui dan Dihapus
 
-Berdasarkan seluruh hasil pengujian faktual:
-1. **Integritas Bisnis:** Alur kerja registrasi, penugasan, penanganan teknis, verifikasi independen, dokumen audit, dan pembukaan kembali telah terverifikasi bekerja sesuai aturan SOP KAI.
-2. **Kualitas Kode & Stabilitas:** Lulus uji linting, type-checking, 84 pengujian otomatis, dan production build tanpa error.
-3. **Keamanan:** Prinsip pemisahan wewenang (*Separation of Duties*) dan prinsip kendali ganda (*Four-Eyes Principle*) terisolasi secara kokoh di lapisan backend.
+1. **Dihapus:**
+   - `docs/aturan-sla.md`: Dihapus secara permanen dari repository karena fitur SLA telah dihapus menyeluruh.
+2. **Diperbarui:**
+   - `README.md`: Dihapus seluruh referensi SLA, diperbarui pohon struktur direktori, dan diselaraskan perintah seed.
+   - `PRD.md`: Dihapus klausul SLA pada modul PIC & ekspor, diganti dengan aturan pemisahan tugas PIC dan ekspor KAI seragam.
+   - `docs/aturan-bisnis.md`: Diperbarui menjadi 5 pilar keputusan bisnis, diselaraskan matriks keselarasan kode aktual, dan dituntaskan seluruh tindak lanjut.
+   - `docs/matriks-hak-akses.md`: Dihapus superuser override Admin pada penanganan PIC, ditegakkan *Four-Eyes Principle* dan *Self-Approval Prevention* pada reopen, serta dicantumkan ekspor Excel seragam.
+   - `docs/state-machine.md`: Diperbarui diagram FSM, diperketat guard transisi T-2 (khusus PIC), T-7 & T-8 (pencegahan self-approval Admin), dan penambahan larangan transisi ilegal.
+   - `docs/arsitektur-skema-database.md`: Dihapus model `SlaPolicy` dan kolom SLA, ditambahkan model counter atomik, dan didokumentasikan snapshot JSON dokumen.
+   - `docs/laporan-pengujian-akhir.md`: Laporan komprehensif regresi terkini (127/127 tests passing).
 
-**Rekomendasi:**  
-Aplikasi SPKP dinyatakan **LULUS PENGUJIAN AKHIR** dan siap dilanjutkan ke tahap deployment staging/produksi.
+---
+
+## 6. Risiko Operasional & Rekomendasi Pengujian Manual
+
+| Item Operasional | Risiko Potensial | Rekomendasi Mitigasi |
+|---|---|---|
+| **Konektivitas Cloudinary CDN** | Gagal unggah foto jika koneksi internet terputus saat di lapangan. | Pastikan jaringan internet di lokasi kerja staf stabil saat melampirkan foto bukti fisik perbaikan. |
+| **Cetak PDF pada Peramban Tertentu** | Perbedaan rendering dialog print bawaan browser (Chrome vs Firefox vs Safari). | Gunakan tombol "Unduh PDF" sebagai opsi utama jika dialog cetak peramban mengalami kendala layout. |
+| **Rotasi Admin Peninjau Reopen** | Jika sistem hanya memiliki 1 akun Admin aktif, permohonan reopen yang dibuat oleh Admin tersebut tidak dapat disetujui sendiri (*Self-Approval Prevention*). | Pastikan unit kerja memiliki minimal 2 staf Admin terdaftar agar alur *Four-Eyes Principle* pada permohonan reopen berjalan lancar. |
+
+---
+
+## 7. Kesimpulan Akhir
+
+Aplikasi **SPKP (Sistem Penanganan Keluhan Pelanggan) PT Kereta Api Indonesia (Persero)** telah sukses melewati seluruh tahapan audit akhir dan pengujian regresi. 
+
+Seluruh 127 pengujian otomatis lulus 100%, kompilasi TypeScript dan linting bersih tanpa error, bundel produksi ter-compile sempurna, dan seluruh dokumentasi teknis telah sinkron dengan implementasi aktual kode sumber. Sistem dinyatakan **SELESAI DAN SIAP DIGUNAKAN**.
