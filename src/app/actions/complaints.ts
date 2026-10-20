@@ -710,11 +710,46 @@ export async function reviewReopenRequest(
   }
 }
 
+// Helper internal: Generate nomor dokumen FR.SM/TI/033.001 atomik
+// Menggunakan DocumentCounter untuk mencegah bentrok/tabrakan nomor saat dua proses berjalan bersamaan
+export async function generateDocumentNumber(client: any, targetDate: Date = new Date()): Promise<string> {
+  const year = targetDate.getFullYear();
+  const month = targetDate.getMonth() + 1;
+  const mm = String(month).padStart(2, "0");
+
+  const counter = await client.documentCounter.upsert({
+    where: { year_month: { year, month } },
+    create: { year, month, lastSequence: 1 },
+    update: { lastSequence: { increment: 1 } },
+  });
+
+  const baseNumber = `FR.SM/TI/033.001/${mm}-${year}`;
+
+  // Jika ini nomor urut 1 di bulan tersebut, cek apakah baseNumber sudah pernah ada di database
+  if (counter.lastSequence === 1) {
+    const existing = await client.document.findFirst({
+      where: { documentNumber: baseNumber },
+      select: { id: true },
+    });
+    if (!existing) {
+      return baseNumber;
+    }
+  }
+
+  // Jika nomor urut > 1 atau baseNumber sudah pernah digunakan sebelumnya, beri akhiran nomor urut batch
+  const seqSuffix = String(counter.lastSequence).padStart(2, "0");
+  return `${baseNumber}-${seqSuffix}`;
+}
+
 // 8. Server Action: Terbitkan Dokumen Rekapitulasi FR.SM/TI/033.001 (Khusus Admin)
 export async function createDocumentBatch(data: {
   complaintIds: string[];
   documentNumber?: string;
+  documentDate?: string | Date;
+  version?: string;
   managementRep: string;
+  parentDocumentId?: string;
+  revisionReason?: string;
 }): Promise<ActionResponse> {
   const user = await getCurrentUser();
   if (!user) {
@@ -732,7 +767,66 @@ export async function createDocumentBatch(data: {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Ambil data keluhan beserta verifikator dan PIC untuk dibekukan
+      // 1. Tentukan tanggal pengesahan dokumen
+      const docDate = data.documentDate ? new Date(data.documentDate) : new Date();
+
+      // 2. Evaluasi apakah ini penerbitan dokumen baru atau revisi dokumen lama
+      let docNumber: string;
+      let revisionNumber = 0;
+      let parentDocId: string | null = null;
+      let revisionReasonStr: string | null = null;
+      const versionStr = data.version?.trim() || "002-2020";
+
+      if (data.parentDocumentId) {
+        // Alur Dokumen Revisi
+        const parentDoc = await tx.document.findUnique({
+          where: { id: data.parentDocumentId },
+        });
+
+        if (!parentDoc) {
+          throw new Error("Dokumen induk yang akan direvisi tidak ditemukan.");
+        }
+
+        if (!data.revisionReason?.trim()) {
+          throw new Error("Alasan revisi wajib dicantumkan saat menerbitkan dokumen revisi.");
+        }
+
+        // Tandai dokumen induk lama sebagai SUPERSEDED
+        await tx.document.update({
+          where: { id: parentDoc.id },
+          data: { status: DocumentStatus.SUPERSEDED },
+        });
+
+        docNumber = parentDoc.documentNumber;
+        revisionNumber = parentDoc.revisionNumber + 1;
+        parentDocId = parentDoc.id;
+        revisionReasonStr = data.revisionReason.trim();
+      } else {
+        // Alur Dokumen Master Pertama (revisionNumber = 0)
+        if (data.documentNumber?.trim()) {
+          docNumber = data.documentNumber.trim();
+
+          // Proteksi Integritas: Cegah penimpaan dokumen yang sudah pernah terbit
+          const existing = await tx.document.findFirst({
+            where: {
+              documentNumber: docNumber,
+              revisionNumber: 0,
+            },
+            select: { id: true },
+          });
+
+          if (existing) {
+            throw new Error(
+              `Dokumen dengan nomor ${docNumber} sudah pernah diterbitkan. Dokumen yang sudah diterbitkan tidak boleh ditimpa. Gunakan mekanisme revisi jika ingin memperbarui dokumen.`
+            );
+          }
+        } else {
+          // Penomoran otomatis aman terhadap konkurensi
+          docNumber = await generateDocumentNumber(tx, docDate);
+        }
+      }
+
+      // 3. Ambil data keluhan beserta verifikator dan PIC untuk dibekukan
       const complaints = await tx.complaint.findMany({
         where: { id: { in: data.complaintIds } },
         include: {
@@ -757,7 +851,7 @@ export async function createDocumentBatch(data: {
         );
       }
 
-      // 2. Buat Snapshot Data Beku (Immutable Snapshot)
+      // 4. Buat Snapshot Data Beku Lengkap (Immutable Snapshot)
       const frozenSnapshot = complaints.map((c) => ({
         complaintId: c.id,
         complaintNumber: c.complaintNumber,
@@ -772,22 +866,24 @@ export async function createDocumentBatch(data: {
         correctiveAction: c.correctiveAction,
         preventiveAction: c.preventiveAction,
         proofImageUrl: c.proofImageUrl,
+        notes: c.notes,
+        status: c.status,
         verifiedAt: c.verifications[0]?.verifiedAt || c.completedAt,
         verifierName: c.verifications[0]?.verifier?.name || "Verifikator Mutu",
+        verificationFeedback: c.verifications[0]?.feedback || "Disetujui",
+        cycle: c.verifications[0]?.cycle || 1,
       }));
 
-      const docNumber =
-        data.documentNumber?.trim() ||
-        `FR.SM/TI/033.001/${new Date().getMonth() + 1}-${new Date().getFullYear()}`;
-
-      // 3. Buat dokumen dengan snapshot permanen
+      // 5. Buat dokumen arsip resmi permanen
       const newDoc = await tx.document.create({
         data: {
           documentNumber: docNumber,
-          version: "002-2020",
-          revisionNumber: 0,
+          version: versionStr,
+          revisionNumber,
+          parentDocumentId: parentDocId,
+          revisionReason: revisionReasonStr,
           status: DocumentStatus.PUBLISHED,
-          documentDate: new Date(),
+          documentDate: docDate,
           publishedAt: new Date(),
           createdById: user.id,
           managementRep: data.managementRep?.trim() || "Management Representative KAI",
@@ -796,21 +892,23 @@ export async function createDocumentBatch(data: {
         },
       });
 
-      // 4. Kaitkan keluhan aktif ke dokumen
+      // 6. Kaitkan keluhan aktif ke dokumen arsip
       await tx.complaint.updateMany({
         where: { id: { in: data.complaintIds } },
         data: { documentId: newDoc.id },
       });
 
-      // 5. Catat Audit Log
+      // 7. Catat Audit Log
       await tx.auditLog.create({
         data: {
           userId: user.id,
-          action: AuditAction.GENERATE_DOCUMENT,
+          action: parentDocId ? AuditAction.REVISE_DOCUMENT : AuditAction.GENERATE_DOCUMENT,
           entity: "Document",
           entityId: newDoc.id,
           details: {
             documentNumber: docNumber,
+            revisionNumber,
+            parentDocumentId: parentDocId,
             totalComplaints: complaints.length,
           },
         },
@@ -831,20 +929,29 @@ export async function createDocumentBatch(data: {
   }
 }
 
-// 8b. Server Action: Ambil Dokumen Resmi Terbit Berdasarkan Nomor Dokumen
-export async function getPublishedDocument(documentNumber: string): Promise<ActionResponse> {
+// 8b. Server Action: Ambil Dokumen Resmi Terbit Berdasarkan ID atau Nomor Dokumen
+export async function getPublishedDocument(identifier: string): Promise<ActionResponse> {
   const user = await getCurrentUser();
   if (!user) {
     return { success: false, error: "Sesi tidak valid.", code: "UNAUTHENTICATED" };
   }
 
   try {
+    const trimmed = identifier.trim();
     const doc = await prisma.document.findFirst({
-      where: { documentNumber: documentNumber.trim() },
+      where: {
+        OR: [
+          { id: trimmed },
+          { documentNumber: trimmed },
+        ],
+      },
       orderBy: { revisionNumber: "desc" },
       include: {
         createdBy: {
           select: { id: true, name: true, email: true, role: true },
+        },
+        parentDocument: {
+          select: { id: true, documentNumber: true, revisionNumber: true, version: true },
         },
       },
     });

@@ -218,3 +218,14 @@ model ComplaintCounter {
   lastSequence Int      @default(0) // Nomor urut terakhir yang digunakan
   updatedAt    DateTime @updatedAt
 }
+
+// Counter atomik untuk nomor dokumen audit FR.SM/TI/033.001 yang aman terhadap konkurensi
+model DocumentCounter {
+  id           String   @id @default(uuid())
+  year         Int
+  month        Int
+  lastSequence Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([year, month])
+}

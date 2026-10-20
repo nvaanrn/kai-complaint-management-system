@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ComplaintData, Role } from "@/types/database";
+import { ComplaintData, Role, VerificationResult } from "@/types/database";
 import {
   createDocumentBatch,
   getPublishedDocument,
@@ -25,6 +25,50 @@ export default function KaiDocumentModal({
   onClose,
   currentUser,
 }: KaiDocumentModalProps) {
+  // Helper untuk memetakan snapshot beku ke struktur data tampilan ComplaintData
+  function mapSnapshotToComplaints(snapshotData: any[]): ComplaintData[] {
+    if (!Array.isArray(snapshotData)) return [];
+    return snapshotData.map((s: any) => ({
+      id: s.complaintId || s.id || `snapshot-${Math.random()}`,
+      complaintNumber: s.complaintNumber,
+      date: s.date,
+      customerName: s.customerName,
+      customerContact: s.customerContact || null,
+      daopOrStation: s.daopOrStation || null,
+      source: s.source,
+      category: s.category || null,
+      description: s.description,
+      status: s.status || "TERVERIFIKASI",
+      picId: null,
+      pic: s.picName ? { id: "", name: s.picName, email: "", role: Role.PIC } : null,
+      correctiveAction: s.correctiveAction || null,
+      preventiveAction: s.preventiveAction || null,
+      proofImageUrl: s.proofImageUrl || null,
+      notes: s.notes || null,
+      verifications: s.verifiedAt
+        ? [
+            {
+              id: `verif-snap-${s.complaintId || s.id}`,
+              complaintId: s.complaintId || s.id,
+              verifierId: "verifier",
+              verifier: {
+                id: "verifier",
+                name: s.verifierName || "Verifikator Mutu",
+                email: "",
+                role: Role.VERIFIKATOR,
+              },
+              result: VerificationResult.APPROVED,
+              feedback: s.verificationFeedback || "Disetujui",
+              cycle: s.cycle || 1,
+              verifiedAt: s.verifiedAt,
+            },
+          ]
+        : [],
+      createdAt: s.date,
+      updatedAt: s.date,
+    }));
+  }
+
   // Hanya ambil keluhan yang sudah TERVERIFIKASI sebagai pilihan default
   const verifiedComplaints = complaints.filter((c) => c.status === "TERVERIFIKASI");
   const [selectedIds, setSelectedIds] = useState<string[]>(
@@ -48,10 +92,8 @@ export default function KaiDocumentModal({
     });
   });
 
-  const [docVersion, setDocVersion] = useState(() => {
-    const yyyy = new Date().getFullYear();
-    return `002-${yyyy}`;
-  });
+  // Versi formulir standar KAI resmi ISO FR.SM/TI/033.001 edisi 002-2020
+  const [docVersion, setDocVersion] = useState("002-2020");
 
   const [managementRep, setManagementRep] = useState("Ir. Bambang Triyono (MR)");
   const [isPreview, setIsPreview] = useState(false);
@@ -61,6 +103,8 @@ export default function KaiDocumentModal({
   const [archivedSnapshot, setArchivedSnapshot] = useState<ComplaintData[] | null>(null);
   const [publishedDocsList, setPublishedDocsList] = useState<any[]>([]);
   const [selectedArchiveId, setSelectedArchiveId] = useState<string>("");
+  const [isRevisionMode, setIsRevisionMode] = useState(false);
+  const [revisionReason, setRevisionReason] = useState("");
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Muat daftar arsip dokumen resmi jika ada di database
@@ -85,6 +129,9 @@ export default function KaiDocumentModal({
   // Handler memilih dokumen dari arsip resmi
   const handleSelectArchive = async (archiveId: string) => {
     setSelectedArchiveId(archiveId);
+    setIsRevisionMode(false);
+    setRevisionReason("");
+
     if (!archiveId) {
       // Kembali ke mode pembuatan dokumen aktif
       setIsPublished(false);
@@ -92,11 +139,9 @@ export default function KaiDocumentModal({
       return;
     }
 
-    const found = publishedDocsList.find((d) => d.id === archiveId);
-    if (!found) return;
-
     try {
-      const res = await getPublishedDocument(found.documentNumber);
+      // Mengambil dokumen arsip berdasarkan ID unik untuk keakuratan audit
+      const res = await getPublishedDocument(archiveId);
       if (res.success && res.data) {
         const doc = res.data;
         setDocNumber(doc.documentNumber);
@@ -113,53 +158,29 @@ export default function KaiDocumentModal({
         }
 
         // Petakan snapshot beku (immutable snapshot) kembali ke struktur ComplaintData
-        if (Array.isArray(doc.snapshotData)) {
-          const snapshotList: ComplaintData[] = doc.snapshotData.map((s: any) => ({
-            id: s.complaintId || s.id || `snapshot-${Math.random()}`,
-            complaintNumber: s.complaintNumber,
-            date: s.date,
-            customerName: s.customerName,
-            customerContact: s.customerContact || null,
-            daopOrStation: s.daopOrStation || null,
-            source: s.source,
-            category: s.category || null,
-            description: s.description,
-            status: "TERVERIFIKASI",
-            picId: null,
-            pic: s.picName ? { id: "", name: s.picName, email: "", role: Role.PIC } : null,
-            correctiveAction: s.correctiveAction || null,
-            preventiveAction: s.preventiveAction || null,
-            proofImageUrl: s.proofImageUrl || null,
-            notes: s.notes || null,
-            verifications: s.verifiedAt
-              ? [
-                  {
-                    id: `verif-snap-${s.complaintId}`,
-                    complaintId: s.complaintId,
-                    verifierId: "verifier",
-                    verifier: {
-                      id: "verifier",
-                      name: s.verifierName || "Verifikator Mutu",
-                      email: "",
-                      role: Role.VERIFIKATOR,
-                    },
-                    result: "APPROVED",
-                    feedback: "Disetujui",
-                    cycle: 1,
-                    verifiedAt: s.verifiedAt,
-                  },
-                ]
-              : [],
-            createdAt: s.date,
-            updatedAt: s.date,
-          }));
+        if (Array.isArray(doc.snapshotData) && doc.snapshotData.length > 0) {
+          const snapshotList = mapSnapshotToComplaints(doc.snapshotData);
           setArchivedSnapshot(snapshotList);
+          setIsPublished(true);
+          setIsPreview(true);
+          setNotification({
+            type: "success",
+            message: `Arsip resmi ${doc.documentNumber} (Revisi ke-${doc.revisionNumber}) berhasil dimuat dari snapshot beku. Data terkunci.`,
+          });
+        } else {
+          // Arsip historis lama yang belum memiliki snapshot beku lengkap
+          setArchivedSnapshot([]);
+          setIsPublished(true);
+          setIsPreview(true);
+          setNotification({
+            type: "error",
+            message: `Perhatian: Dokumen arsip ${doc.documentNumber} dibuat sebelum implementasi snapshot beku sehingga tidak memiliki rekaman beku.`,
+          });
         }
-        setIsPublished(true);
-        setIsPreview(true);
+      } else {
         setNotification({
-          type: "success",
-          message: `Arsip resmi ${doc.documentNumber} berhasil dimuat. Data terkunci sesuai arsip publikasi.`,
+          type: "error",
+          message: res.error || "Gagal memuat rincian arsip dokumen resmi.",
         });
       }
     } catch (err) {
@@ -301,6 +322,14 @@ export default function KaiDocumentModal({
       return;
     }
 
+    if (isRevisionMode && !revisionReason.trim()) {
+      setNotification({
+        type: "error",
+        message: "Alasan revisi wajib diisi saat menerbitkan dokumen versi revisi.",
+      });
+      return;
+    }
+
     // Periksa status keluhan
     const unverified = displayList.filter((c) => c.status !== "TERVERIFIKASI");
     if (unverified.length > 0) {
@@ -316,15 +345,44 @@ export default function KaiDocumentModal({
       const result = await createDocumentBatch({
         complaintIds: selectedIds,
         documentNumber: docNumber,
+        version: docVersion,
         managementRep,
+        parentDocumentId: isRevisionMode && selectedArchiveId ? selectedArchiveId : undefined,
+        revisionReason: isRevisionMode ? revisionReason : undefined,
       });
 
-      if (result.success) {
+      if (result.success && result.data) {
+        const createdDoc = result.data;
+        setDocNumber(createdDoc.documentNumber);
+        setDocVersion(createdDoc.version || "002-2020");
+        if (createdDoc.documentDate) {
+          setDocDate(
+            new Date(createdDoc.documentDate).toLocaleDateString("id-ID", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })
+          );
+        }
+        setManagementRep(createdDoc.managementRep);
+        setSelectedArchiveId(createdDoc.id);
+
+        // Kunci snapshot arsip beku ke state tampilan
+        if (Array.isArray(createdDoc.snapshotData)) {
+          const snapshotList = mapSnapshotToComplaints(createdDoc.snapshotData);
+          setArchivedSnapshot(snapshotList);
+        }
+
         setIsPublished(true);
+        setIsPreview(true);
+        setIsRevisionMode(false);
+        setRevisionReason("");
+
         setNotification({
           type: "success",
-          message: `Dokumen ${docNumber} berhasil diterbitkan resmi dan snapshot data telah terkunci.`,
+          message: `Dokumen ${createdDoc.documentNumber} (Revisi ke-${createdDoc.revisionNumber}) berhasil diterbitkan resmi. Snapshot data telah terkunci.`,
         });
+
         // Muat ulang daftar arsip
         const resArchives = await getPublishedDocumentsList();
         if (resArchives.success && resArchives.data) {
@@ -466,19 +524,62 @@ export default function KaiDocumentModal({
                   <span>Print / Cetak</span>
                 </button>
 
-                {/* Tombol Terbitkan Dokumen (Khusus Admin bila belum diterbitkan) */}
+                {/* Tombol Revisi Dokumen (Khusus Admin saat membuka dokumen arsip terbit) */}
+                {currentUser.role === Role.ADMIN && isPublished && selectedArchiveId && !isRevisionMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRevisionMode(true);
+                      setIsPublished(false);
+                      setIsPreview(false);
+                      setNotification({
+                        type: "success",
+                        message: "Mode Revisi Dokumen aktif. Anda dapat mengubah pilihan keluhan dan mengisi alasan revisi.",
+                      });
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold text-sky-200 hover:text-white bg-sky-950/80 hover:bg-sky-900 border border-sky-700/60 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    title="Buat versi revisi resmi baru yang terhubung ke dokumen induk ini"
+                  >
+                    <svg className="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    <span>Revisi Dokumen</span>
+                  </button>
+                )}
+
+                {/* Tombol Batalkan Mode Revisi */}
+                {isRevisionMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRevisionMode(false);
+                      setIsPublished(true);
+                      setIsPreview(true);
+                      setNotification(null);
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 rounded-xl transition cursor-pointer"
+                  >
+                    Batal Revisi
+                  </button>
+                )}
+
+                {/* Tombol Terbitkan Dokumen (Khusus Admin bila belum diterbitkan atau dalam mode revisi) */}
                 {currentUser.role === Role.ADMIN && !isPublished && (
                   <button
                     type="button"
                     onClick={handlePublishBatch}
                     disabled={isSaving || displayList.length === 0}
-                    className="px-3 py-1.5 text-xs font-semibold text-amber-200 hover:text-white bg-amber-950/80 hover:bg-amber-900 border border-amber-700/60 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    title="Terbitkan secara resmi dan bekukan snapshot audit"
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                      isRevisionMode
+                        ? "text-sky-200 hover:text-white bg-sky-950/90 hover:bg-sky-900 border border-sky-600/70 shadow-md"
+                        : "text-amber-200 hover:text-white bg-amber-950/80 hover:bg-amber-900 border border-amber-700/60"
+                    }`}
+                    title={isRevisionMode ? "Terbitkan versi revisi resmi baru" : "Terbitkan secara resmi dan bekukan snapshot audit"}
                   >
                     <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
-                    <span>{isSaving ? "Menerbitkan..." : "Terbitkan & Kunci"}</span>
+                    <span>{isSaving ? "Menerbitkan..." : isRevisionMode ? "Terbitkan Versi Revisi" : "Terbitkan & Kunci"}</span>
                   </button>
                 )}
               </>
@@ -537,11 +638,41 @@ export default function KaiDocumentModal({
                       <option value="">-- Buat Draf Dokumen Baru --</option>
                       {publishedDocsList.map((doc) => (
                         <option key={doc.id} value={doc.id}>
-                          {doc.documentNumber} ({doc.totalComplaints} keluhan) -{" "}
+                          {doc.documentNumber} {doc.revisionNumber > 0 ? `(Rev. ${doc.revisionNumber})` : ""} ({doc.totalComplaints} keluhan) -{" "}
                           {new Date(doc.documentDate).toLocaleDateString("id-ID")}
                         </option>
                       ))}
                     </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Panel Khusus Mode Revisi */}
+              {isRevisionMode && (
+                <div className="bg-amber-50 border border-amber-300 p-4 rounded-xl text-xs space-y-2">
+                  <div className="font-bold text-amber-900 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                      <span>Mode Revisi Dokumen Kendali Mutu</span>
+                    </div>
+                    <span className="text-[10px] bg-amber-200 text-amber-900 font-mono px-2 py-0.5 rounded font-bold">
+                      Induk: {docNumber}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800">
+                    Dokumen baru akan diterbitkan sebagai revisi lanjutan dan dokumen induk lama akan diubah statusnya menjadi <b>SUPERSEDED</b> untuk kebutuhan audit.
+                  </p>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Alasan Revisi Dokumen <span className="text-rose-500">*</span>:
+                    </label>
+                    <input
+                      type="text"
+                      value={revisionReason}
+                      onChange={(e) => setRevisionReason(e.target.value)}
+                      placeholder="Contoh: Koreksi tindakan pencegahan keluhan AC setelah inspeksi lanjutan MR..."
+                      className="w-full px-3 py-2 text-xs border border-amber-300 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
                   </div>
                 </div>
               )}

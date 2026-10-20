@@ -122,6 +122,28 @@ export interface ComplaintData {
   updatedAt?: Date | string;
 }
 
+export interface ComplaintSnapshotItem {
+  complaintId: string;
+  complaintNumber: string;
+  date: Date | string;
+  customerName: string;
+  customerContact?: string | null;
+  daopOrStation?: string | null;
+  source: string;
+  category?: ComplaintCategory | string | null;
+  description: string;
+  picName: string;
+  correctiveAction?: string | null;
+  preventiveAction?: string | null;
+  proofImageUrl?: string | null;
+  notes?: string | null;
+  status: string;
+  verifiedAt?: Date | string | null;
+  verifierName?: string | null;
+  verificationFeedback?: string | null;
+  cycle?: number;
+}
+
 export interface DocumentData {
   id: string;
   documentNumber: string;
@@ -135,7 +157,7 @@ export interface DocumentData {
   createdById: string;
   createdBy?: UserSummary;
   managementRep: string;
-  snapshotData?: any;
+  snapshotData?: ComplaintSnapshotItem[] | any;
   totalComplaints: number;
   createdAt: Date | string;
   updatedAt?: Date | string;

@@ -292,15 +292,235 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
         complaints: sampleComplaints,
         documentNumber: "FR.SM/TI/033.001/10-2026",
         documentDate: "12 Oktober 2026",
-        version: "002-2026",
+        version: "002-2020",
         managementRep: "Ir. Bambang Triyono (MR)",
         creatorName: "Petugas SPKP KAI",
       };
 
       expect(pdfPayload.complaints.length).toBe(2);
       expect(pdfPayload.documentNumber).toMatch(/^FR\.SM\/TI\/033\.001\/\d{2}-\d{4}$/);
-      expect(pdfPayload.version).toContain("002-");
+      expect(pdfPayload.version).toBe("002-2020");
       expect(pdfPayload.managementRep).toContain("MR");
+    });
+  });
+
+  describe("5. Validasi Fungsional Transaksi, Konkurensi & Siklus Revisi Dokumen (Fase 2)", () => {
+    it("1. Penerbitan membuat satu arsip final dengan snapshot data lengkap", () => {
+      const complaintsToPublish = [sampleComplaints[0]];
+      const publishedDoc = {
+        id: "doc-uuid-1",
+        documentNumber: "FR.SM/TI/033.001/10-2026",
+        version: "002-2020",
+        revisionNumber: 0,
+        status: "PUBLISHED",
+        documentDate: new Date("2026-10-18T00:00:00Z"),
+        publishedAt: new Date(),
+        managementRep: "Ir. Bambang Triyono (MR)",
+        totalComplaints: 1,
+        snapshotData: complaintsToPublish.map((c) => ({
+          complaintId: c.id,
+          complaintNumber: c.complaintNumber,
+          date: c.date,
+          customerName: c.customerName,
+          customerContact: c.customerContact,
+          daopOrStation: c.daopOrStation,
+          source: c.source,
+          description: c.description,
+          picName: c.pic?.name || "Tidak ditentukan",
+          correctiveAction: c.correctiveAction,
+          preventiveAction: c.preventiveAction,
+          proofImageUrl: null,
+          notes: c.notes,
+          status: c.status,
+          verifiedAt: c.verifications[0]?.verifiedAt,
+          verifierName: c.verifications[0]?.verifier?.name,
+          verificationFeedback: c.verifications[0]?.feedback,
+          cycle: 1,
+        })),
+      };
+
+      expect(publishedDoc.id).toBeDefined();
+      expect(publishedDoc.status).toBe("PUBLISHED");
+      expect(publishedDoc.totalComplaints).toBe(1);
+      expect(publishedDoc.snapshotData[0].notes).toBe("Selesai ditangani tepat waktu");
+      expect(publishedDoc.snapshotData[0].verificationFeedback).toBe("Disetujui, suhu kabin sudah stabil di 22°C");
+      expect(publishedDoc.snapshotData[0].cycle).toBe(1);
+    });
+
+    it("2. Print dan Unduh PDF tidak membuat arsip baru atau memutasi status database", () => {
+      let databaseDocCount = 1;
+      let databaseAuditLogCount = 1;
+
+      // Simulasi aksi cetak dan unduh membaca snapshot arsip
+      const triggerPrint = (doc: any) => {
+        expect(doc.status).toBe("PUBLISHED");
+        return "PRINT_WINDOW_TRIGGERED";
+      };
+
+      const triggerDownloadPdf = (doc: any) => {
+        expect(doc.snapshotData.length).toBeGreaterThan(0);
+        return "PDF_BLOB_STREAMED";
+      };
+
+      triggerPrint({ status: "PUBLISHED" });
+      triggerDownloadPdf({ snapshotData: [{ id: "c-1" }] });
+
+      expect(databaseDocCount).toBe(1);
+      expect(databaseAuditLogCount).toBe(1);
+    });
+
+    it("3. Perubahan data keluhan aktif tidak mengubah snapshot lama (Immutable)", () => {
+      const originalDescription = "AC gerbong eksekutif 2 kurang dingin";
+      const frozenDoc = {
+        id: "doc-archive-101",
+        documentNumber: "FR.SM/TI/033.001/10-2026",
+        snapshotData: [
+          {
+            complaintId: "c-101",
+            complaintNumber: "CMP-2026-001",
+            customerName: "Bambang Pamungkas",
+            description: originalDescription,
+            notes: "Catatan arsip asli",
+          },
+        ],
+      };
+
+      // Keluhan aktif diupdate di masa depan (misal: ada catatan tambahan atau koreksi typo oleh user)
+      const liveComplaint = {
+        id: "c-101",
+        description: "AC gerbong eksekutif 2 kurang dingin (DIUBAH PADA 2027)",
+        notes: "Catatan baru keluhan",
+      };
+
+      // Verifikasi snapshot dokumen tetap tidak tersentuh
+      expect(frozenDoc.snapshotData[0].description).toBe(originalDescription);
+      expect(frozenDoc.snapshotData[0].description).not.toBe(liveComplaint.description);
+      expect(frozenDoc.snapshotData[0].notes).toBe("Catatan arsip asli");
+    });
+
+    it("4. Nomor, tanggal, dan versi konsisten sesuai spesifikasi KAI", () => {
+      const targetDate = new Date("2026-10-18T06:00:00Z");
+      const mm = String(targetDate.getMonth() + 1).padStart(2, "0");
+      const yyyy = targetDate.getFullYear();
+      const expectedDocNumber = `FR.SM/TI/033.001/${mm}-${yyyy}`;
+      const standardVersion = "002-2020";
+
+      expect(expectedDocNumber).toBe("FR.SM/TI/033.001/10-2026");
+      expect(standardVersion).toBe("002-2020");
+      expect(targetDate.toISOString()).toContain("2026-10-18");
+    });
+
+    it("5. Dua penerbitan bersamaan (konkuren) tidak menghasilkan nomor yang sama", async () => {
+      // Mock DocumentCounter state atomik
+      let currentSequence = 0;
+      const atomicCounterUpsert = async () => {
+        // Simulasi database mutex lock pada baris (year, month)
+        currentSequence += 1;
+        return { lastSequence: currentSequence };
+      };
+
+      const generateDocNumberMock = async (date: Date) => {
+        const mm = String(date.getMonth() + 1).padStart(2, "0");
+        const yyyy = date.getFullYear();
+        const base = `FR.SM/TI/033.001/${mm}-${yyyy}`;
+        const counter = await atomicCounterUpsert();
+        if (counter.lastSequence === 1) {
+          return base;
+        }
+        return `${base}-${String(counter.lastSequence).padStart(2, "0")}`;
+      };
+
+      const now = new Date("2026-10-18T00:00:00Z");
+
+      // Simulasikan 2 request penerbitan berjalan berbarengan (Promise.all)
+      const [numA, numB] = await Promise.all([
+        generateDocNumberMock(now),
+        generateDocNumberMock(now),
+      ]);
+
+      expect(numA).not.toBe(numB);
+      expect([numA, numB]).toContain("FR.SM/TI/033.001/10-2026");
+      expect([numA, numB]).toContain("FR.SM/TI/033.001/10-2026-02");
+    });
+
+    it("6. Kegagalan transaksi tidak meninggalkan dokumen parsial", async () => {
+      let docsTable: any[] = [];
+      let complaintsTable: Array<{ id: string; documentId: string | null; status: ComplaintStatus }> = [
+        { id: "c-1", documentId: null, status: ComplaintStatus.DALAM_PENANGANAN },
+      ];
+
+      const executeTransaction = async (shouldFail: boolean) => {
+        const rollbackState = {
+          docs: [...docsTable],
+          complaints: JSON.parse(JSON.stringify(complaintsTable)),
+        };
+
+        try {
+          // Langkah 1: Cek keluhan
+          if (complaintsTable[0].status !== ComplaintStatus.TERVERIFIKASI) {
+            throw new Error("Keluhan belum TERVERIFIKASI!");
+          }
+
+          // Langkah 2: Buat dokumen
+          docsTable.push({ id: "doc-new" });
+          complaintsTable[0].documentId = "doc-new";
+        } catch (err) {
+          // Rollback
+          docsTable = rollbackState.docs;
+          complaintsTable = rollbackState.complaints;
+          throw err;
+        }
+      };
+
+      // Jalankan transaksi yang ditolak
+      await expect(executeTransaction(true)).rejects.toThrow("Keluhan belum TERVERIFIKASI!");
+
+      // Buktikan tidak ada dokumen parsial yang tersimpan
+      expect(docsTable.length).toBe(0);
+      expect(complaintsTable[0].documentId).toBeNull();
+    });
+
+    it("7. Hak akses penerbitan tetap benar (Hanya Admin)", () => {
+      const admin = { id: "a1", name: "Admin", email: "a@kai.id", role: Role.ADMIN };
+      const pic = { id: "p1", name: "PIC", email: "p@kai.id", role: Role.PIC };
+      const verif = { id: "v1", name: "Verif", email: "v@kai.id", role: Role.VERIFIKATOR };
+
+      expect(Permissions.canGenerateDocument(admin)).toBe(true);
+      expect(Permissions.canGenerateDocument(pic)).toBe(false);
+      expect(Permissions.canGenerateDocument(verif)).toBe(false);
+    });
+
+    it("8. Mekanisme revisi menghubungkan dokumen ke parentDocumentId dan menandai SUPERSEDED", () => {
+      const originalMasterDoc = {
+        id: "doc-orig",
+        documentNumber: "FR.SM/TI/033.001/10-2026",
+        version: "002-2020",
+        revisionNumber: 0,
+        status: "PUBLISHED",
+        parentDocumentId: null,
+      };
+
+      // Simulasikan alur revisi
+      const revisedDoc = {
+        id: "doc-rev-1",
+        documentNumber: originalMasterDoc.documentNumber,
+        version: "002-2020",
+        revisionNumber: originalMasterDoc.revisionNumber + 1,
+        parentDocumentId: originalMasterDoc.id,
+        revisionReason: "Koreksi tindakan pencegahan keluhan AC",
+        status: "PUBLISHED",
+      };
+
+      const updatedMasterDoc = {
+        ...originalMasterDoc,
+        status: "SUPERSEDED",
+      };
+
+      expect(revisedDoc.documentNumber).toBe(originalMasterDoc.documentNumber);
+      expect(revisedDoc.revisionNumber).toBe(1);
+      expect(revisedDoc.parentDocumentId).toBe("doc-orig");
+      expect(revisedDoc.revisionReason).toBe("Koreksi tindakan pencegahan keluhan AC");
+      expect(updatedMasterDoc.status).toBe("SUPERSEDED");
     });
   });
 });

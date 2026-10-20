@@ -187,5 +187,33 @@
   - [x] Penyesuaian test suite [tests/ui_dashboard_phase6.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/ui_dashboard_phase6.test.ts) dan [tests/e2e_security_release.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/e2e_security_release.test.ts) (84 tests lulus 100%).
   - [x] Verifikasi TypeScript (`tsc --noEmit`), ESLint (`next lint`), dan Next.js production build (`next build`) lulus tanpa error.
 
+---
+
+## 📑 FASE: Perbaikan Snapshot dan Arsip Dokumen KAI (Selesai ✅)
+
+- [x] **Audit & Pemisahan Penerbitan dari Aksi Baca (Print & PDF):**
+  - [x] Audit implementasi [src/app/actions/complaints.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/app/actions/complaints.ts), [src/components/KaiDocumentModal.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/KaiDocumentModal.tsx), [src/components/KaiDocumentView.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/KaiDocumentView.tsx), dan [src/components/pdf/KaiDocumentPdf.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/pdf/KaiDocumentPdf.tsx).
+  - [x] Memastikan tombol Print dan Unduh PDF tidak memicu mutasi atau penerbitan ulang (hanya membaca snapshot beku arsip).
+  - [x] Pemisahan ketat proses penerbitan resmi (`createDocumentBatch`) sebagai mutasi tersendiri yang membekukan keluhan terverifikasi ke dalam `snapshotData`.
+- [x] **Integritas Snapshot Kebal Ubah (Immutable Snapshot):**
+  - [x] Snapshot menyimpan seluruh informasi rekapitulasi secara mandiri: identitas keluhan, nomor tiket, nama pelanggan, kontak, stasiun/Daop, kategori, uraian keluhan, PIC, tindakan perbaikan, tindakan pencegahan, foto bukti, catatan, status, verifikator, kesimpulan verifikasi, dan nomor siklus.
+  - [x] Perubahan data keluhan aktif di database tidak mempengaruhi snapshot arsip dokumen yang telah diterbitkan.
+  - [x] Perlindungan penimpaan dokumen: dokumen yang sudah diterbitkan tidak boleh ditimpa atau dihapus.
+- [x] **Mekanisme Dokumen Revisi (Revision Lineage):**
+  - [x] Dukungan rantai revisi dokumen: dokumen baru dapat merevisi dokumen sebelumnya dengan `parentDocumentId`, `revisionReason`, dan increment `revisionNumber`.
+  - [x] Dokumen lama otomatis ditandai sebagai `SUPERSEDED` dan arsip aslinya tetap utuh untuk kebutuhan audit.
+  - [x] Mode revisi interaktif di UI [src/components/KaiDocumentModal.tsx](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/src/components/KaiDocumentModal.tsx).
+- [x] **Pencegahan Bentrok Nomor Dokumen & Concurrency-Safe Counter:**
+  - [x] Model `DocumentCounter` di [prisma/schema.prisma](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/schema.prisma) untuk menghasilkan nomor dokumen atomik per bulan dan tahun (`FR.SM/TI/033.001/MM-YYYY`).
+  - [x] Migrasi aman [prisma/migrations/20261018064500_add_document_counter/migration.sql](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/prisma/migrations/20261018064500_add_document_counter/migration.sql) tanpa reset database atau penghapusan data arsip historis.
+  - [x] Jaminan dua transaksi penerbitan bersamaan (konkuren) tidak akan menghasilkan nomor dokumen yang sama.
+- [x] **Penyempurnaan Lookup & Proteksi Data Historis:**
+  - [x] Fungsi `getPublishedDocument` kini mendukung query berdasarkan `id` unik dokumen maupun `documentNumber`, mencegah ambiguitas jika terdapat nomor serupa.
+  - [x] Penanganan aman dokumen lama yang belum memiliki snapshot: UI tidak mengarang atau mencampur data keluhan terkini ke arsip lama.
+- [x] **Pengujian Komprehensif (92 Tests Lulus 100%):**
+  - [x] Penambahan test suite validasi transaksi, konkurensi, snapshot immutability, dan rantai revisi di [tests/kai_document_print_pdf.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/kai_document_print_pdf.test.ts).
+  - [x] Seluruh 7 test files (92 tests) lulus 100%.
+  - [x] TypeScript compiler (`tsc --noEmit`), ESLint (`next lint`), dan Next.js production build (`next build`) lulus tanpa peringatan atau error.
+
 
 
