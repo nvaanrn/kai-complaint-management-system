@@ -215,5 +215,55 @@
   - [x] Seluruh 7 test files (92 tests) lulus 100%.
   - [x] TypeScript compiler (`tsc --noEmit`), ESLint (`next lint`), dan Next.js production build (`next build`) lulus tanpa peringatan atau error.
 
+---
 
+## 🔐 Fase 4: Penguatan Hak Akses PIC dan Persetujuan Reopen (Selesai ✅)
+
+- [x] **Audit Menyeluruh Hak Akses:**
+  - [x] Identifikasi Admin override ilegal pada `canExecuteComplaint`, `SAVE_PROGRESS` state machine, dan `updateComplaintProgress` server action.
+  - [x] Identifikasi celah self-approval pada `reviewReopenRequest`.
+
+- [x] **Perbaikan `permissions.ts` — `canExecuteComplaint`:**
+  - [x] Hapus baris `if (user.role === Role.ADMIN) return true` yang membolehkan Admin override tindakan penanganan PIC.
+  - [x] Hanya PIC yang ditugaskan yang dapat mengeksekusi keluhan (separation of duties).
+
+- [x] **Perbaikan `state-machine.ts` — Aksi `SAVE_PROGRESS`:**
+  - [x] Guard diubah dari `!== PIC && !== ADMIN` menjadi hanya `!== PIC`.
+  - [x] Admin tidak lagi dapat menyimpan progres penanganan atas nama PIC.
+
+- [x] **Perbaikan `complaints.ts` — `updateComplaintProgress`:**
+  - [x] Guard awal diubah menjadi hanya `Role.PIC` — Admin mendapat HTTP 403 FORBIDDEN.
+  - [x] Ownership check diubah dari `if (user.role === Role.PIC && complaint.picId !== user.id)` menjadi `if (complaint.picId !== user.id)` tanpa pengecualian role — sehingga tidak ada celah lewat manipulasi endpoint langsung.
+
+- [x] **Perbaikan `complaints.ts` — `reviewReopenRequest` (Self-Approval Prevention):**
+  - [x] Tambah guard: jika `reopenReq.requestedById === user.id`, lempar error "Pemohon tidak dapat menyetujui permohonan yang diajukan sendiri."
+  - [x] Menerapkan four-eyes principle pada alur reopen: pengaju dan peninjau harus orang berbeda.
+  - [x] Status PENDING dicek di dalam transaksi sebelum diproses — mencegah dua Admin menyetujui permohonan yang sama secara bersamaan (konkurensi aman).
+
+- [x] **Dokumentasi Matriks Hak Akses (Final):**
+  | Aksi | Admin | PIC (Ditugaskan) | PIC (Lain) | Verifikator |
+  |------|-------|-----------------|-----------|-------------|
+  | Buat keluhan | ✅ | ❌ | ❌ | ❌ |
+  | Tetapkan/ganti PIC | ✅ | ❌ | ❌ | ❌ |
+  | Simpan progres (SAVE_PROGRESS) | ❌ | ✅ | ❌ | ❌ |
+  | Ajukan verifikasi | ❌ | ✅ | ❌ | ❌ |
+  | Verifikasi / Setujui / Tolak | ❌ | ❌ | ❌ | ✅ |
+  | Hapus keluhan | ✅ | ❌ | ❌ | ❌ |
+  | Terbitkan dokumen | ✅ | ❌ | ❌ | ❌ |
+  | Ajukan reopen | ✅ | ❌ | ❌ | ✅ |
+  | Setujui/tolak reopen (bukan pemohon sendiri) | ✅ | ❌ | ❌ | ❌ |
+
+- [x] **Pengujian — Suite Baru `tests/fase4_rbac_reopen.test.ts` (35 Tests):**
+  - [x] PIC mengubah keluhan yang ditugaskan kepadanya (diizinkan).
+  - [x] PIC tidak dapat mengubah keluhan PIC lain (ditolak).
+  - [x] Admin tidak dapat menyimpan progres atas nama PIC (ditolak di permissions + state machine).
+  - [x] Verifikator tidak dapat menjalankan aksi PIC (ditolak).
+  - [x] Pemohon reopen tidak dapat menyetujui permohonannya sendiri (ditolak).
+  - [x] Reopen disetujui: status DALAM_PENANGANAN, PIC tetap sama, completedAt = null.
+  - [x] Reopen ditolak: status TERVERIFIKASI tidak berubah, rekaman histori tersimpan.
+  - [x] Dua Admin tidak dapat memproses reopen yang sama bersamaan (status guard atomik).
+  - [x] Semua pemanggilan endpoint tunduk pada pemeriksaan otorisasi berlapis.
+- [x] **Pembaruan `tests/auth_rbac.test.ts`:**
+  - [x] Ganti test "Admin memiliki hak override" dengan test "Admin TIDAK memiliki hak override eksekusi penanganan (separation of duties — Fase 4)".
+- [x] **Hasil Akhir: 127 tests lulus 100% — TypeScript clean — 8 test files.**
 

@@ -271,8 +271,9 @@ export async function updateComplaintProgress(
     return { success: false, error: "Sesi tidak valid.", code: "UNAUTHENTICATED" };
   }
 
-  // RBAC Server-Side: Hanya PIC (atau Admin superuser) yang berwenang
-  if (user.role !== Role.PIC && user.role !== Role.ADMIN) {
+  // RBAC Server-Side: Eksklusif hanya PIC yang ditugaskan.
+  // Admin TIDAK berwenang menyimpan progres atas nama PIC (separation of duties — SOP KAI).
+  if (user.role !== Role.PIC) {
     return {
       success: false,
       error: "Hanya petugas PIC yang berwenang melakukan tindakan penanganan dan pengajuan verifikasi.",
@@ -303,8 +304,8 @@ export async function updateComplaintProgress(
         throw new Error("Data keluhan tidak ditemukan.");
       }
 
-      // Validasi Kepemilikan (Ownership): PIC hanya boleh mengeksekusi keluhan miliknya
-      if (user.role === Role.PIC && complaint.picId !== user.id) {
+      // Validasi Kepemilikan (Ownership): Hanya PIC yang ditugaskan — tidak ada pengecualian role lain
+      if (complaint.picId !== user.id) {
         throw new Error("Akses ditolak. Anda hanya berwenang mengeksekusi keluhan yang ditugaskan kepada Anda.");
       }
 
@@ -650,6 +651,15 @@ export async function reviewReopenRequest(
 
       if (reopenReq.status !== ReopenStatus.PENDING) {
         throw new Error("Permohonan ini telah ditinjau sebelumnya dan tidak dapat diproses ulang.");
+      }
+
+      // Guard Self-Approval: Pemohon tidak boleh menyetujui/menolak permohonan yang ia ajukan sendiri
+      // (Four-Eyes Principle — SOP KAI: pengaju dan peninjau harus orang berbeda)
+      if (reopenReq.requestedById === user.id) {
+        throw new Error(
+          "Pemohon tidak dapat menyetujui atau menolak permohonan reopen yang diajukan oleh dirinya sendiri. " +
+          "Minta Admin lain untuk meninjau permohonan ini."
+        );
       }
 
       const isApproved = data.decision === "APPROVED";

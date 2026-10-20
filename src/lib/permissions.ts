@@ -40,7 +40,8 @@ export const Permissions = {
     return user !== null && user.role === Role.ADMIN;
   },
 
-  // PIC hanya berwenang mengeksekusi keluhan yang ditugaskan kepadanya
+  // PIC hanya berwenang mengeksekusi keluhan yang ditugaskan kepadanya.
+  // Admin TIDAK memiliki override untuk tindakan penanganan (separation of duties).
   canExecuteComplaint: (user: UserSession | null, complaint: ComplaintSummary): boolean => {
     if (!user) return false;
     // Status keluhan harus DALAM_PENANGANAN atau BELUM_DITANGANI untuk dapat dikerjakan
@@ -50,7 +51,7 @@ export const Permissions = {
     ) {
       return false;
     }
-    if (user.role === Role.ADMIN) return true; // Admin memiliki override superuser
+    // Hanya PIC yang ditugaskan — Admin TIDAK memiliki hak eksekusi penanganan
     if (user.role === Role.PIC) {
       return complaint.picId === user.id;
     }

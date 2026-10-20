@@ -33,10 +33,12 @@ export function validateStateTransition(
 
     case ComplaintStatus.DALAM_PENANGANAN:
       if (action === AuditAction.SAVE_PROGRESS) {
-        if (userRole !== Role.PIC && userRole !== Role.ADMIN) {
+        // Menyimpan progres adalah hak eksklusif PIC yang ditugaskan.
+        // Admin TIDAK diizinkan menyimpan progres atas nama PIC (separation of duties).
+        if (userRole !== Role.PIC) {
           return {
             isAllowed: false,
-            error: "Hanya petugas PIC yang berwenang menyimpan progres penanganan.",
+            error: "Hanya petugas PIC yang berwenang menyimpan progres penanganan keluhan.",
           };
         }
         return { isAllowed: true, nextStatus: ComplaintStatus.DALAM_PENANGANAN };

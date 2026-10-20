@@ -68,8 +68,9 @@ describe("Unit Test: Role-Based Access Control (RBAC Permissions)", () => {
       expect(Permissions.canExecuteComplaint(verifikatorUser, complaintAssignedToPic1)).toBe(false);
     });
 
-    it("Admin memiliki hak override untuk mengeksekusi bila darurat", () => {
-      expect(Permissions.canExecuteComplaint(adminUser, complaintAssignedToPic1)).toBe(true);
+    it("Admin TIDAK memiliki hak override eksekusi penanganan (separation of duties — Fase 4)", () => {
+      // Admin tidak boleh menyimpan progres atas nama PIC, meskipun keluhan memiliki PIC lain
+      expect(Permissions.canExecuteComplaint(adminUser, complaintAssignedToPic1)).toBe(false);
     });
   });
 
