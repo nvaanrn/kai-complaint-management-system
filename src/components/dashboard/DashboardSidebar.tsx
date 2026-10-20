@@ -4,6 +4,7 @@ import React from "react";
 import Image from "next/image";
 import LogoutButton from "@/components/LogoutButton";
 import { UserSummary, Role } from "@/types/database";
+import Link from "next/link";
 
 interface DashboardSidebarProps {
   currentUser: UserSummary;
@@ -132,28 +133,28 @@ export default function DashboardSidebar({
             </span>
           </button>
 
-          {/* Verification Queue */}
-          <button
-            type="button"
-            onClick={() => handleSelectMenu("verifications")}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-              activeMenu === "verifications"
-                ? "bg-blue-600 text-white shadow-md"
-                : "text-slate-300 hover:bg-slate-800 hover:text-white"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span>Verifikasi Mutu</span>
-            </div>
-            {pendingVerifications > 0 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-900/80 text-purple-200 border border-purple-700 animate-pulse">
-                {pendingVerifications}
-              </span>
-            )}
-          </button>
+          {/* Verification Menu */}
+                      {/* Verification Menu */}
+            <Link
+              href="/dashboard?menu=verifications"
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                activeMenu === "verifications"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Verifikasi</span>
+              </div>
+              {currentUser.role !== Role.ADMIN && pendingVerifications > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-900/80 text-purple-200 border border-purple-700 animate-pulse">
+                  {pendingVerifications}
+                </span>
+              )}
+            </Link>
 
           {/* Dokumen Cetak KAI */}
           <button

@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { cloudinary } from "@/lib/cloudinary";
 import { Role } from "@/types/database";
+import { promises as fs } from "fs";
+import path from "path";
 
 // Magic bytes untuk validasi konten file (jangan hanya percaya MIME dari client)
 const MAGIC_BYTES: Record<string, number[][]> = {
   "image/png": [[0x89, 0x50, 0x4e, 0x47]],
   "image/jpeg": [[0xff, 0xd8, 0xff]],
+  "image/jpg": [[0xff, 0xd8, 0xff]],
   "image/webp": [[0x52, 0x49, 0x46, 0x46]], // RIFF header
 };
 
@@ -29,9 +32,10 @@ function validateFileMagicBytes(buffer: Buffer): boolean {
 }
 
 /**
- * Route Handler: Upload foto bukti lapangan ke Cloudinary.
- * Hanya dapat diakses oleh PIC (yang mengerjakan keluhan) atau Admin.
- * Returns: { url: string } — URL publik Cloudinary yang tersimpan di field proofImageUrl
+ * Route Handler: Upload foto bukti lapangan.
+ * Mendukung Cloudinary sebagai target utama jika kredensial terkonfigurasi,
+ * dan secara otomatis menggunakan penyimpanan lokal (public/uploads/) sebagai fallback aman.
+ * Hanya dapat diakses oleh PIC atau Admin.
  */
 export async function POST(req: NextRequest) {
   // 1. Validasi autentikasi
@@ -83,28 +87,71 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 6. Upload ke Cloudinary via buffer (base64 data URI)
-    // Nama file menggunakan timestamp + random suffix (bukan nama pengguna/asli)
+    // 6. Nama file menggunakan timestamp + random suffix (bukan nama pengguna/asli)
     const uniqueId = `proof-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     const base64 = buffer.toString("base64");
-    const dataUri = `data:${file.type};base64,${base64}`;
+    const mimeType = file.type === "image/jpg" ? "image/jpeg" : file.type;
+    const dataUri = `data:${mimeType};base64,${base64}`;
 
-    const result = await cloudinary.uploader.upload(dataUri, {
-      folder: "spkp-kai/proof-images",
-      resource_type: "image",
-      public_id: uniqueId,
-      overwrite: false, // Cegah penimpaan file yang sudah ada
-      transformation: [
-        { quality: "auto:good" },
-        { fetch_format: "auto" },
-        { width: 2048, height: 2048, crop: "limit" },
-      ],
-    });
+    // Cek apakah kredensial Cloudinary valid dan bukan nilai demo/placeholder
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-    return NextResponse.json({ url: result.secure_url });
+    const isCloudinaryConfigured = Boolean(
+      cloudName &&
+      cloudName !== "demo" &&
+      cloudName !== "your_cloud_name" &&
+      apiKey &&
+      apiKey !== "demo_key" &&
+      apiKey !== "your_api_key" &&
+      apiSecret &&
+      apiSecret !== "demo_secret" &&
+      apiSecret !== "your_api_secret"
+    );
+
+    if (isCloudinaryConfigured) {
+      try {
+        const result = await cloudinary.uploader.upload(dataUri, {
+          folder: "spkp-kai/proof-images",
+          resource_type: "image",
+          public_id: uniqueId,
+          overwrite: false,
+          transformation: [
+            { quality: "auto:good" },
+            { fetch_format: "auto" },
+            { width: 2048, height: 2048, crop: "limit" },
+          ],
+        });
+
+        if (result && result.secure_url) {
+          return NextResponse.json({ url: result.secure_url });
+        }
+      } catch (cloudError: any) {
+        console.warn(
+          "[Upload] Cloudinary upload gagal atau ditolak. Beralih ke penyimpanan lokal (public/uploads):",
+          cloudError?.message || cloudError
+        );
+      }
+    }
+
+    // 7. Penyimpanan Fallback: Simpan ke local filesystem (public/uploads/)
+    const uploadsDir = path.join(process.cwd(), "public", "uploads");
+    await fs.mkdir(uploadsDir, { recursive: true });
+
+    let ext = "jpg";
+    if (file.type === "image/png") ext = "png";
+    else if (file.type === "image/webp") ext = "webp";
+
+    const fileName = `${uniqueId}.${ext}`;
+    const filePath = path.join(uploadsDir, fileName);
+
+    await fs.writeFile(filePath, buffer);
+    const localUrl = `/uploads/${fileName}`;
+
+    return NextResponse.json({ url: localUrl });
   } catch (error: any) {
-    console.error("Error uploading file ke Cloudinary:", error);
-    // Jangan bocorkan detail error internal ke client
+    console.error("Error uploading file:", error);
     return NextResponse.json(
       { error: "Gagal mengunggah foto bukti. Coba lagi." },
       { status: 500 }

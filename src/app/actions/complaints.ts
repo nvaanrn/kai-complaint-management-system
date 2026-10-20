@@ -30,20 +30,82 @@ export interface ActionResponse<T = any> {
   code?: string;
 }
 
-// 1. Helper internal: Generate nomor keluhan otomatis CMP-YYYY-XXXX
-// Menggunakan ComplaintCounter atomik untuk menghindari duplikasi pada permintaan bersamaan.
-async function generateComplaintNumber(client: any): Promise<string> {
-  const currentYear = new Date().getFullYear();
-
-  // Atomic upsert+increment: jika baris tahun belum ada, buat dengan lastSequence=1.
-  // Jika sudah ada, increment lastSequence secara atomik di level database.
-  const counter = await client.complaintCounter.upsert({
-    where: { year: currentYear },
-    create: { year: currentYear, lastSequence: 1 },
-    update: { lastSequence: { increment: 1 } },
+// 1. Helper internal: Dapatkan sequence tertinggi yang sudah ada di tabel Complaint untuk tahun tertentu
+export async function getHighestComplaintSequenceForYear(tx: any, year: number): Promise<number> {
+  const prefix = `CMP-${year}-`;
+  const existing = await tx.complaint.findMany({
+    where: {
+      complaintNumber: {
+        startsWith: prefix,
+      },
+    },
+    select: {
+      complaintNumber: true,
+    },
   });
 
-  return formatComplaintNumber(currentYear, counter.lastSequence);
+  let maxSeq = 0;
+  for (const item of existing) {
+    if (item.complaintNumber) {
+      const parts = item.complaintNumber.split("-");
+      if (parts.length >= 3) {
+        const num = parseInt(parts[2], 10);
+        if (!isNaN(num) && num > maxSeq) {
+          maxSeq = num;
+        }
+      }
+    }
+  }
+  return maxSeq;
+}
+
+// Helper internal: Generate nomor keluhan otomatis CMP-YYYY-XXX
+// Menggunakan ComplaintCounter atomik dengan mekanisme sinkronisasi mandiri (self-healing)
+// untuk memastikan keunikan nomor sekalipun counter belum terinisialisasi atau tertinggal dari data eksisting.
+export async function generateComplaintNumber(
+  client: any,
+  targetYear: number = new Date().getFullYear()
+): Promise<string> {
+  // Dapatkan sequence tertinggi yang sudah tersimpan di tabel Complaint
+  const maxExisting = await getHighestComplaintSequenceForYear(client, targetYear);
+
+  // Ambil record counter saat ini
+  const existingCounter = await client.complaintCounter.findUnique({
+    where: { year: targetYear },
+  });
+
+  let nextSequence: number;
+
+  if (!existingCounter) {
+    // Jika counter belum ada, mulai dari (urutan tertinggi eksis + 1)
+    nextSequence = maxExisting + 1;
+    await client.complaintCounter.create({
+      data: {
+        year: targetYear,
+        lastSequence: nextSequence,
+      },
+    });
+  } else if (existingCounter.lastSequence < maxExisting) {
+    // Self-healing: counter tertinggal dari data nyata di tabel Complaint
+    nextSequence = maxExisting + 1;
+    await client.complaintCounter.update({
+      where: { year: targetYear },
+      data: {
+        lastSequence: nextSequence,
+      },
+    });
+  } else {
+    // Counter sinkron dan valid -> increment atomik
+    const updated = await client.complaintCounter.update({
+      where: { year: targetYear },
+      data: {
+        lastSequence: { increment: 1 },
+      },
+    });
+    nextSequence = updated.lastSequence;
+  }
+
+  return formatComplaintNumber(targetYear, nextSequence);
 }
 
 
@@ -80,79 +142,113 @@ export async function createComplaint(formData: {
     return { success: false, error: validation.firstError, code: "VALIDATION_ERROR" };
   }
 
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Ambil nomor keluhan unik
-      const complaintNumber = await generateComplaintNumber(tx);
-      const complaintDate = formData.date ? new Date(formData.date) : new Date();
+  const complaintDate = formData.date ? new Date(formData.date) : new Date();
+  const validDate = isNaN(complaintDate.getTime()) ? new Date() : complaintDate;
+  const targetYear = validDate.getFullYear();
 
-      // 2. Verifikasi penugasan PIC awal jika diisi
-      let assignedPicId: string | null = null;
-      let assignedAt: Date | null = null;
-      let initialStatus = ComplaintStatus.BELUM_DITANGANI;
+  let attempts = 0;
+  const maxAttempts = 3;
+  let lastError: any = null;
 
-      if (formData.picId && formData.picId.trim() !== "") {
-        const picUser = await tx.user.findUnique({
-          where: { id: formData.picId },
-          select: { id: true, role: true },
-        });
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // 1. Ambil nomor keluhan unik aman konkurensi & self-healing
+        const complaintNumber = await generateComplaintNumber(tx, targetYear);
 
-        if (!picUser || (picUser.role !== Role.PIC && picUser.role !== Role.ADMIN)) {
-          throw new Error("Petugas yang dipilih tidak valid atau bukan PIC.");
+        // 2. Verifikasi penugasan PIC awal jika diisi
+        let assignedPicId: string | null = null;
+        let assignedAt: Date | null = null;
+        let initialStatus = ComplaintStatus.BELUM_DITANGANI;
+
+        if (formData.picId && formData.picId.trim() !== "") {
+          const picUser = await tx.user.findUnique({
+            where: { id: formData.picId },
+            select: { id: true, role: true },
+          });
+
+          if (!picUser || (picUser.role !== Role.PIC && picUser.role !== Role.ADMIN)) {
+            throw new Error("Petugas yang dipilih tidak valid atau bukan PIC.");
+          }
+
+          assignedPicId = picUser.id;
+          assignedAt = new Date();
+          initialStatus = ComplaintStatus.DALAM_PENANGANAN;
         }
 
-        assignedPicId = picUser.id;
-        assignedAt = new Date();
-        initialStatus = ComplaintStatus.DALAM_PENANGANAN;
-      }
-
-      // 3. Buat baris keluhan baru
-      const newComplaint = await tx.complaint.create({
-        data: {
-          complaintNumber,
-          customerName: formData.customerName.trim(),
-          customerContact: formData.customerContact?.trim() || null,
-          daopOrStation: formData.daopOrStation?.trim() || null,
-          source: formData.source,
-          category: (formData.category as ComplaintCategory) || null,
-          description: formData.description.trim(),
-          date: complaintDate,
-          status: initialStatus,
-          picId: assignedPicId,
-          assignedAt,
-        },
-      });
-
-      // 5. Catat Audit Log
-      await tx.auditLog.create({
-        data: {
-          complaintId: newComplaint.id,
-          userId: user.id,
-          action: AuditAction.CREATE_COMPLAINT,
-          entity: "Complaint",
-          entityId: newComplaint.id,
-          details: {
+        // 3. Buat baris keluhan baru
+        const newComplaint = await tx.complaint.create({
+          data: {
             complaintNumber,
-            category: formData.category,
+            customerName: formData.customerName.trim(),
+            customerContact: formData.customerContact?.trim() || null,
+            daopOrStation: formData.daopOrStation?.trim() || null,
+            source: formData.source,
+            category: (formData.category as ComplaintCategory) || null,
+            description: formData.description.trim(),
+            date: validDate,
             status: initialStatus,
             picId: assignedPicId,
+            assignedAt,
           },
-        },
+        });
+
+        // 5. Catat Audit Log
+        await tx.auditLog.create({
+          data: {
+            complaintId: newComplaint.id,
+            userId: user.id,
+            action: AuditAction.CREATE_COMPLAINT,
+            entity: "Complaint",
+            entityId: newComplaint.id,
+            details: {
+              complaintNumber,
+              category: formData.category,
+              status: initialStatus,
+              picId: assignedPicId,
+            },
+          },
+        });
+
+        return newComplaint;
       });
 
-      return newComplaint;
-    });
-
-    revalidatePath("/dashboard");
-    return { success: true, data: result };
-  } catch (error: any) {
-    console.error("Error creating complaint:", error);
-    return {
-      success: false,
-      error: error.message || "Gagal mencatat keluhan baru.",
-      code: error.code || "INTERNAL_ERROR",
-    };
+      revalidatePath("/dashboard");
+      return { success: true, data: result };
+    } catch (error: any) {
+      lastError = error;
+      // Jika terjadi race condition unik constraint pada complaintNumber (Prisma error P2002)
+      if (
+        (error.code === "P2002" || String(error.message).includes("complaintNumber")) &&
+        attempts < maxAttempts
+      ) {
+        console.warn(`[createComplaint] Deteksi konflik nomor keluhan. Melakukan retry (${attempts}/${maxAttempts})...`);
+        continue;
+      }
+      break;
+    }
   }
+
+  console.error("Error creating complaint:", lastError);
+  let userFriendlyError = "Gagal mencatat keluhan baru.";
+  let errorCode = lastError?.code || "INTERNAL_ERROR";
+
+  if (lastError?.code === "P2002" || String(lastError?.message).includes("complaintNumber")) {
+    userFriendlyError = "Nomor registrasi keluhan bertabrakan dengan data yang sudah terdaftar. Sistem telah menyesuaikan urutan nomor, silakan klik Simpan kembali.";
+    errorCode = "DUPLICATE_COMPLAINT_NUMBER";
+  } else if (lastError?.message?.includes("Petugas yang dipilih")) {
+    userFriendlyError = lastError.message;
+    errorCode = "INVALID_PIC";
+  } else if (lastError?.message) {
+    userFriendlyError = lastError.message;
+  }
+
+  return {
+    success: false,
+    error: userFriendlyError,
+    code: errorCode,
+  };
 }
 
 // 3. Server Action: Menugaskan / Mengganti PIC (Khusus Admin)
@@ -389,7 +485,7 @@ export async function updateComplaintProgress(
   }
 }
 
-// 5. Server Action: Verifikasi Mutu Keluhan (Eksklusif Role VERIFIKATOR)
+// 5. Server Action: Verifikasi Keluhan (Eksklusif Role VERIFIKATOR)
 export async function verifyComplaint(
   complaintId: string,
   data: {
@@ -406,7 +502,7 @@ export async function verifyComplaint(
   if (!Permissions.canVerifyComplaint(user)) {
     return {
       success: false,
-      error: "Hanya Verifikator yang berwenang melakukan verifikasi mutu keluhan (SOP KAI four-eyes principle).",
+      error: "Hanya Verifikator yang berwenang melakukan verifikasi keluhan (SOP KAI four-eyes principle).",
       code: "FORBIDDEN",
     };
   }
@@ -1031,15 +1127,19 @@ export async function deleteComplaint(complaintId: string): Promise<ActionRespon
     const result = await prisma.$transaction(async (tx) => {
       const complaint = await tx.complaint.findUnique({
         where: { id: complaintId },
-        select: { id: true, complaintNumber: true, documentId: true },
+        select: { id: true, complaintNumber: true, documentId: true, status: true },
       });
 
       if (!complaint) {
         throw new Error("Data keluhan tidak ditemukan.");
       }
 
-      // Proteksi Integritas: Dilarang menghapus keluhan yang sudah masuk arsip dokumen terbit
-      if (complaint.documentId) {
+      // Penguncian Data & Proteksi Integritas:
+      // Keluhan TERVERIFIKASI atau yang sudah masuk arsip dokumen resmi DILARANG keras dihapus
+      if (!Permissions.canDeleteComplaint(user, complaint as any)) {
+        if (complaint.status === ComplaintStatus.TERVERIFIKASI) {
+          throw new Error("Keluhan yang telah TERVERIFIKASI telah disahkan dan tidak dapat dihapus.");
+        }
         throw new Error("Keluhan yang telah tercatat dalam arsip dokumen resmi tidak dapat dihapus.");
       }
 

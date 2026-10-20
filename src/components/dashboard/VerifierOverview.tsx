@@ -117,7 +117,7 @@ export default function VerifierOverview({
         </div>
       </section>
 
-      {/* Ketentuan Verifikasi Mutu */}
+      {/* Ketentuan Verifikasi */}
       <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-purple-950">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-purple-900 text-white flex items-center justify-center font-bold text-sm shrink-0">

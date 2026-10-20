@@ -118,6 +118,7 @@ export interface ComplaintData {
   submissionCount?: number;
   verifications?: VerificationData[];
   reopenRequests?: ReopenRequestData[];
+  documentId?: string | null;
   createdAt: Date | string;
   updatedAt?: Date | string;
 }

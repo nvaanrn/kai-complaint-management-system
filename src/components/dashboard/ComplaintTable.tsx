@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { ComplaintData, UserSummary, Role } from "@/types/database";
+import { ComplaintData, UserSummary, Role, ComplaintStatus } from "@/types/database";
+import { VALID_SOURCES, normalizeComplaintSource } from "@/lib/validation";
 import StatusBadge from "./StatusBadge";
 
 interface ComplaintTableProps {
@@ -60,17 +61,35 @@ export default function ComplaintTable({
     }
   };
 
+  const isVerificationMenu = activeMenu === "verifications";
+  const isAdminVerification = isVerificationMenu && currentUser.role === Role.ADMIN;
+
   // Filter Data
   const filteredData = useMemo(() => {
     return complaints.filter((item) => {
+      // Jika di menu Verifikasi untuk Admin: HANYA keluhan yang sudah TERVERIFIKASI
+      if (isAdminVerification) {
+        if (item.status !== "TERVERIFIKASI") {
+          return false;
+        }
+      } else if (isVerificationMenu) {
+        // Jika di menu Verifikasi untuk PIC/Verifikator: hanya MENUNGGU_VERIFIKASI atau TERVERIFIKASI
+        if (item.status !== "MENUNGGU_VERIFIKASI" && item.status !== "TERVERIFIKASI") {
+          return false;
+        }
+      }
+
       // 1. Status Filter
       if (statusFilter !== "ALL" && item.status !== statusFilter) {
         return false;
       }
 
       // 2. Source Filter
-      if (sourceFilter !== "ALL" && item.source !== sourceFilter) {
-        return false;
+      if (sourceFilter !== "ALL") {
+        const normSource = normalizeComplaintSource(item.source);
+        if (normSource !== sourceFilter && item.source !== sourceFilter) {
+          return false;
+        }
       }
 
       // 3. PIC Only Filter (Khusus PIC)
@@ -101,6 +120,8 @@ export default function ComplaintTable({
     picOnlyFilter,
     searchQuery,
     isAssignedToCurrentUser,
+    isVerificationMenu,
+    isAdminVerification,
   ]);
 
   React.useEffect(() => {
@@ -121,6 +142,51 @@ export default function ComplaintTable({
   const countSelesai = complaints.filter((c) => c.status === "TERVERIFIKASI").length;
   const myTasksCount = complaints.filter(isAssignedToCurrentUser).length;
 
+  // Status Tabs per Role & Active Menu
+  const statusTabs = useMemo(() => {
+    if (isAdminVerification) {
+      // Role Admin di menu Verifikasi: hanya data Terverifikasi, tanpa tab Menunggu Verifikasi
+      return [
+        { id: "TERVERIFIKASI", label: "Terverifikasi", count: countSelesai },
+      ];
+    }
+    if (isVerificationMenu) {
+      // Role Verifikator & PIC di menu Verifikasi: tab Menunggu Verifikasi dan Terverifikasi
+      return [
+        { id: "MENUNGGU_VERIFIKASI", label: "Menunggu Verifikasi", count: countVerif },
+        { id: "TERVERIFIKASI", label: "Terverifikasi", count: countSelesai },
+      ];
+    }
+    // Menu biasa: semua tab
+    return [
+      { id: "ALL", label: "Semua", count: complaints.length },
+      { id: "BELUM_DITANGANI", label: "Belum Ditangani", count: countBelum },
+      { id: "DALAM_PENANGANAN", label: "Dalam Penanganan", count: countDalam },
+      { id: "MENUNGGU_VERIFIKASI", label: "Menunggu Verifikasi", count: countVerif },
+      { id: "TERVERIFIKASI", label: "Terverifikasi", count: countSelesai },
+    ];
+  }, [isAdminVerification, isVerificationMenu, countSelesai, countVerif, complaints.length, countBelum, countDalam]);
+
+  // Default filter & reset helpers
+  const defaultStatusFilter = isAdminVerification
+    ? ComplaintStatus.TERVERIFIKASI
+    : isVerificationMenu
+    ? ComplaintStatus.MENUNGGU_VERIFIKASI
+    : "ALL";
+
+  const hasActiveFilters =
+    statusFilter !== defaultStatusFilter ||
+    sourceFilter !== "ALL" ||
+    searchQuery.trim() !== "" ||
+    picOnlyFilter;
+
+  const handleResetFilters = () => {
+    onSelectStatusFilter(defaultStatusFilter);
+    onSelectSourceFilter("ALL");
+    onSearchQueryChange("");
+    onTogglePicOnly(false);
+  };
+
   return (
     <section className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
       {/* 1. Header Toolbar */}
@@ -128,7 +194,9 @@ export default function ComplaintTable({
         <div>
           <h3 className="text-base font-bold text-slate-900 tracking-tight">
             {activeMenu === "verifications"
-              ? "Antrean Verifikasi Mutu Layanan"
+              ? currentUser.role === Role.ADMIN
+                ? "Daftar Keluhan Terverifikasi"
+                : "Verifikasi Keluhan Layanan"
               : activeMenu === "overview"
               ? "Daftar Keluhan Terbaru"
               : "Monitoring & Penanganan Keluhan Pelanggan"}
@@ -184,13 +252,7 @@ export default function ComplaintTable({
       <div className="p-3.5 sm:p-4 bg-slate-50/60 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
         {/* Status Filter Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none max-w-full">
-          {[
-            { id: "ALL", label: "Semua", count: complaints.length },
-            { id: "BELUM_DITANGANI", label: "Belum Ditangani", count: countBelum },
-            { id: "DALAM_PENANGANAN", label: "Dalam Penanganan", count: countDalam },
-            { id: "MENUNGGU_VERIFIKASI", label: "Menunggu Verifikasi", count: countVerif },
-            { id: "TERVERIFIKASI", label: "Terverifikasi", count: countSelesai },
-          ].map((tab) => (
+          {statusTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -228,24 +290,16 @@ export default function ComplaintTable({
               className="py-1 px-2.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
             >
               <option value="ALL">Semua Saluran</option>
-              <option value="Telepon">Telepon</option>
-              <option value="Email">Email</option>
-              <option value="Laporan Langsung">Laporan Langsung</option>
-              <option value="Nota Dinas">Nota Dinas</option>
-              <option value="Helpdesk Internal">Helpdesk Internal</option>
-              <option value="Survey Pelanggan">Survey Pelanggan</option>
+              {VALID_SOURCES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
             </select>
           </div>
 
-          {(statusFilter !== "ALL" || sourceFilter !== "ALL" || searchQuery || picOnlyFilter) && (
+          {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => {
-                onSelectStatusFilter("ALL");
-                onSelectSourceFilter("ALL");
-                onSearchQueryChange("");
-                onTogglePicOnly(false);
-              }}
+              onClick={handleResetFilters}
               className="text-[11px] text-blue-700 hover:text-blue-900 underline font-medium px-1 cursor-pointer"
             >
               Reset Filter
@@ -278,21 +332,18 @@ export default function ComplaintTable({
                     <p className="text-xs text-slate-400 leading-relaxed">
                       {searchQuery
                         ? `Tidak ada hasil untuk pencarian "${searchQuery}".`
+                        : isAdminVerification
+                        ? "Tidak ada keluhan dengan status terverifikasi saat ini."
                         : statusFilter === "MENUNGGU_VERIFIKASI"
-                        ? "Tidak ada tiket yang sedang menunggu verifikasi mutu saat ini."
+                        ? "Tidak ada tiket yang sedang menunggu verifikasi saat ini."
                         : picOnlyFilter
                         ? "Belum ada tiket keluhan yang ditugaskan kepada Anda."
                         : "Tidak ada data yang sesuai dengan kriteria filter saat ini."}
                     </p>
-                    {(statusFilter !== "ALL" || sourceFilter !== "ALL" || searchQuery || picOnlyFilter) && (
+                    {hasActiveFilters && (
                       <button
                         type="button"
-                        onClick={() => {
-                          onSelectStatusFilter("ALL");
-                          onSelectSourceFilter("ALL");
-                          onSearchQueryChange("");
-                          onTogglePicOnly(false);
-                        }}
+                        onClick={handleResetFilters}
                         className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-900 border border-blue-200 rounded-xl text-xs font-semibold hover:bg-blue-100 transition cursor-pointer"
                       >
                         Reset Semua Filter
@@ -377,7 +428,7 @@ export default function ComplaintTable({
                       className="flex items-center justify-end gap-1.5"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {/* Tombol Mata: Lihat Detail */}
+                      {/* Tombol Mata: Lihat Detail (Selalu aktif untuk semua role) */}
                       <button
                         type="button"
                         onClick={() => onViewDetail(item)}
@@ -391,45 +442,61 @@ export default function ComplaintTable({
                         </svg>
                       </button>
 
-                      {/* Tombol Pensil: Edit / Tindak Lanjut Sesuai Role */}
-                      <button
-                        type="button"
-                        onClick={() => onOpenAction(item)}
-                        title={
-                          currentUser.role === Role.PIC
-                            ? isAssignedToCurrentUser(item)
-                              ? "Eksekusi Keluhan (Tugas Anda)"
-                              : "Pantau Penanganan (Ditugaskan ke PIC Lain)"
-                            : currentUser.role === Role.ADMIN
-                            ? "Edit Data Keluhan & Penugasan PIC"
-                            : "Verifikasi Mutu Keluhan"
-                        }
-                        aria-label={`Tindak lanjut keluhan ${item.complaintNumber}`}
-                        className={`p-1.5 rounded-lg border transition cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
-                          currentUser.role === Role.PIC && isAssignedToCurrentUser(item)
-                            ? "text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border-blue-200"
-                            : "text-slate-500 hover:text-amber-700 bg-slate-100/80 hover:bg-amber-50 border-slate-200/60 hover:border-amber-200"
-                        }`}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
+                      {/* Status Terkunci untuk Terverifikasi */}
+                      {item.status === ComplaintStatus.TERVERIFIKASI && (
+                        <span
+                          title="Data Terverifikasi & Terkunci"
+                          className="px-1.5 py-1 rounded-lg text-emerald-700 bg-emerald-50 border border-emerald-200/60 text-xs font-semibold flex items-center gap-1 shrink-0"
+                        >
+                          🔒
+                        </span>
+                      )}
 
-                      {/* Tombol Sampah: Hapus (Khusus Admin) */}
-                      {currentUser.role === Role.ADMIN && onDeleteComplaint && (
+                      {/* Tombol Pensil: Edit / Tindak Lanjut Sesuai Role (Sembunyi jika Terverifikasi atau Menu Verifikasi Admin) */}
+                      {!isAdminVerification && item.status !== ComplaintStatus.TERVERIFIKASI && (
                         <button
                           type="button"
-                          onClick={() => onDeleteComplaint(item)}
-                          title="Hapus Keluhan"
-                          aria-label={`Hapus keluhan ${item.complaintNumber}`}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 bg-slate-100/80 hover:bg-rose-50 border border-slate-200/60 hover:border-rose-200 transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                          onClick={() => onOpenAction(item)}
+                          title={
+                            currentUser.role === Role.PIC
+                              ? isAssignedToCurrentUser(item)
+                                ? "Eksekusi Keluhan (Tugas Anda)"
+                                : "Pantau Penanganan (Ditugaskan ke PIC Lain)"
+                              : currentUser.role === Role.ADMIN
+                              ? "Edit Data Keluhan & Penugasan PIC"
+                              : "Verifikasi Keluhan"
+                          }
+                          aria-label={`Tindak lanjut keluhan ${item.complaintNumber}`}
+                          className={`p-1.5 rounded-lg border transition cursor-pointer shadow-2xs active:scale-95 shrink-0 ${
+                            currentUser.role === Role.PIC && isAssignedToCurrentUser(item)
+                              ? "text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border-blue-200"
+                              : "text-slate-500 hover:text-amber-700 bg-slate-100/80 hover:bg-amber-50 border-slate-200/60 hover:border-amber-200"
+                          }`}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                           </svg>
                         </button>
                       )}
+
+                      {/* Tombol Sampah: Hapus (Khusus Admin, HANYA jika bukan menu verifikasi, belum terverifikasi, dan belum berdokumen) */}
+                      {!isAdminVerification &&
+                        item.status !== ComplaintStatus.TERVERIFIKASI &&
+                        !item.documentId &&
+                        currentUser.role === Role.ADMIN &&
+                        onDeleteComplaint && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteComplaint(item)}
+                            title="Hapus Keluhan"
+                            aria-label={`Hapus keluhan ${item.complaintNumber}`}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 bg-slate-100/80 hover:bg-rose-50 border border-slate-200/60 hover:border-rose-200 transition cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                     </div>
                   </td>
                 </tr>

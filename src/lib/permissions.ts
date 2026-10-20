@@ -35,9 +35,14 @@ export const Permissions = {
     return true;
   },
 
-  // Hanya Admin yang berwenang menghapus keluhan
-  canDeleteComplaint: (user: UserSession | null): boolean => {
-    return user !== null && user.role === Role.ADMIN;
+  // Hanya Admin yang berwenang menghapus keluhan, dengan syarat keluhan BELUM terverifikasi
+  // dan belum tercatat dalam dokumen terbit resmi (penguncian integritas data).
+  canDeleteComplaint: (user: UserSession | null, complaint?: ComplaintSummary): boolean => {
+    if (!user || user.role !== Role.ADMIN) return false;
+    if (complaint && (complaint.status === ComplaintStatus.TERVERIFIKASI || Boolean(complaint.documentId))) {
+      return false;
+    }
+    return true;
   },
 
   // PIC hanya berwenang mengeksekusi keluhan yang ditugaskan kepadanya.

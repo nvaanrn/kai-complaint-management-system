@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import {
   ComplaintData,
@@ -51,6 +52,15 @@ export default function DashboardClient({
   const [activeMenu, setActiveMenu] = useState<
     "overview" | "complaints" | "verifications" | "documents"
   >("overview");
+
+  // Apply URL query param to open verification tab directly
+  const searchParams = useSearchParams();
+  React.useEffect(() => {
+    const menu = searchParams?.get("menu");
+    if (menu === "verifications") {
+      setActiveMenu("verifications");
+    }
+  }, [searchParams]);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Filters State
@@ -311,7 +321,11 @@ export default function DashboardClient({
         setActiveMenu={(m) => {
           setActiveMenu(m);
           if (m === "verifications") {
-            setStatusFilter("MENUNGGU_VERIFIKASI");
+            if (currentUser.role === Role.ADMIN) {
+              setStatusFilter("TERVERIFIKASI");
+            } else {
+              setStatusFilter("MENUNGGU_VERIFIKASI");
+            }
           } else {
             setStatusFilter("ALL");
           }
@@ -352,7 +366,7 @@ export default function DashboardClient({
                 {currentUser.role === Role.PIC &&
                   `Terdapat ${countMyTasks} tiket keluhan yang ditugaskan ke Anda. Segera lakukan tindakan perbaikan, lampirkan bukti fisik, dan ajukan verifikasi.`}
                 {currentUser.role === Role.VERIFIKATOR &&
-                  `Terdapat ${countVerif} tiket keluhan menunggu verifikasi mutu. Validasi tindakan korektif dan foto bukti fisik dari PIC.`}
+                  `Terdapat ${countVerif} tiket keluhan menunggu verifikasi. Validasi tindakan perbaikan dan foto bukti fisik dari PIC.`}
               </p>
             </div>
           </div>
@@ -459,14 +473,26 @@ export default function DashboardClient({
             <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                  Antrean Verifikasi Mutu Layanan
+                  {currentUser.role === Role.ADMIN
+                    ? "Daftar Keluhan Terverifikasi"
+                    : "Verifikasi Keluhan Layanan"}
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Tinjau kelengkapan tindakan korektif dan foto bukti lapangan sebelum status disetujui.
+                  {currentUser.role === Role.ADMIN
+                    ? "Keluhan operasional yang telah disahkan oleh tim verifikator secara resmi (Mode Baca Saja)."
+                    : "Tinjau kelengkapan tindakan perbaikan dan foto bukti lapangan sebelum status disetujui."}
                 </p>
               </div>
-              <span className="text-xs font-bold px-3 py-1 rounded-xl bg-purple-50 text-purple-900 border border-purple-200 self-start sm:self-auto">
-                Menunggu: {countVerif} Tiket
+              <span
+                className={`text-xs font-bold px-3 py-1 rounded-xl border self-start sm:self-auto ${
+                  currentUser.role === Role.ADMIN
+                    ? "bg-emerald-50 text-emerald-900 border-emerald-200"
+                    : "bg-purple-50 text-purple-900 border-purple-200"
+                }`}
+              >
+                {currentUser.role === Role.ADMIN
+                  ? `Terverifikasi: ${complaints.filter((c) => c.status === "TERVERIFIKASI").length} Tiket`
+                  : `Menunggu: ${countVerif} Tiket`}
               </span>
             </div>
           )}
@@ -555,6 +581,7 @@ export default function DashboardClient({
           complaint={selectedViewComplaint}
           onClose={() => setSelectedViewComplaint(null)}
           onOpenEditMode={(comp) => setSelectedComplaint(comp)}
+          isReadOnly={activeMenu === "verifications" && currentUser.role === Role.ADMIN}
         />
       )}
 

@@ -44,14 +44,21 @@ export interface ValidationResult {
   firstError?: string;
 }
 
-export const VALID_SOURCES = [
-  "Aplikasi Access by KAI",
-  "Contact Center 121",
-  "Media Sosial (Twitter/X, IG)",
-  "Petugas Stasiun / Loket",
-  "Email Resmi KAI",
-  "Lainnya",
-] as const;
+import {
+  VALID_SOURCES,
+  type ComplaintSource,
+  normalizeComplaintSource,
+  SOURCE_METADATA,
+  LEGACY_SOURCE_MAPPING,
+} from "./sources";
+
+export {
+  VALID_SOURCES,
+  type ComplaintSource,
+  normalizeComplaintSource,
+  SOURCE_METADATA,
+  LEGACY_SOURCE_MAPPING,
+};
 
 export const VALID_CATEGORIES = Object.values(ComplaintCategory);
 

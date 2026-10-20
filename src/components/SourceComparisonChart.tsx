@@ -1,15 +1,22 @@
 "use client";
 
 import React from "react";
+import {
+  VALID_SOURCES,
+  SOURCE_METADATA,
+  normalizeComplaintSource,
+  ComplaintSource,
+} from "@/lib/sources";
 
 interface SourceStat {
-  source: string;
+  source: ComplaintSource;
   count: number;
   percentage: number;
   color: string;
   bgColor: string;
   textColor: string;
   icon: string;
+  description: string;
 }
 
 interface SourceComparisonChartProps {
@@ -25,65 +32,27 @@ export default function SourceComparisonChart({
 }: SourceComparisonChartProps) {
   const total = complaints.length;
 
-  const sourceConfig = [
-    {
-      source: "Telepon",
-      icon: "📞",
-      color: "bg-blue-600",
-      bgColor: "bg-blue-50",
-      textColor: "text-blue-700",
-    },
-    {
-      source: "Email",
-      icon: "✉️",
-      color: "bg-indigo-600",
-      bgColor: "bg-indigo-50",
-      textColor: "text-indigo-700",
-    },
-    {
-      source: "Laporan Langsung",
-      icon: "🏢",
-      color: "bg-amber-600",
-      bgColor: "bg-amber-50",
-      textColor: "text-amber-800",
-    },
-    {
-      source: "Nota Dinas",
-      icon: "📑",
-      color: "bg-violet-600",
-      bgColor: "bg-violet-50",
-      textColor: "text-violet-700",
-    },
-    {
-      source: "Helpdesk Internal",
-      icon: "💻",
-      color: "bg-sky-600",
-      bgColor: "bg-sky-50",
-      textColor: "text-sky-700",
-    },
-    {
-      source: "Survey Pelanggan",
-      icon: "📝",
-      color: "bg-emerald-600",
-      bgColor: "bg-emerald-50",
-      textColor: "text-emerald-700",
-    },
-  ];
-
-  // Hitung jumlah per sumber
-  const stats: SourceStat[] = sourceConfig.map((cfg) => {
+  // Hitung metrik analitik berdasarkan sumber data resmi KAI (Single Source of Truth)
+  const stats: SourceStat[] = VALID_SOURCES.map((src) => {
+    const meta = SOURCE_METADATA[src];
+    // Menghitung keluhan dengan toleransi normalisasi untuk data historis
     const count = complaints.filter(
-      (c) => c.source.toLowerCase() === cfg.source.toLowerCase()
+      (c) => normalizeComplaintSource(c.source) === src
     ).length;
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return {
-      ...cfg,
+      source: src,
       count,
       percentage,
+      color: meta.color,
+      bgColor: meta.bgColor,
+      textColor: meta.textColor,
+      icon: meta.icon,
+      description: meta.description,
     };
   });
 
-  // Urutkan dari jumlah terbanyak
+  // Urutkan dari jumlah keluhan terbanyak untuk tampilan kartu
   const sortedStats = [...stats].sort((a, b) => b.count - a.count);
   const highestSource = sortedStats[0]?.count > 0 ? sortedStats[0] : null;
 
@@ -94,14 +63,14 @@ export default function SourceComparisonChart({
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-              Distribusi Saluran Keluhan
+              Distribusi Saluran Keluhan Resmi KAI
             </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600 border border-slate-200">
-              Analitik Admin
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
+              Analitik Terkini
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Perbandingan persentase keluhan yang diterima dari setiap media pelaporan
+            Komposisi persentase keluhan yang diterima dari seluruh saluran resmi layanan PT KAI
           </p>
         </div>
 
@@ -122,11 +91,13 @@ export default function SourceComparisonChart({
             <div className="w-full bg-slate-200" />
           ) : (
             stats.map((s, idx) => {
-              if (s.percentage === 0) return null;
+              if (s.count === 0) return null;
+              // Gunakan lebar aktual proporsional agar 100% akurat
+              const widthPct = (s.count / total) * 100;
               return (
                 <div
                   key={idx}
-                  style={{ width: `${s.percentage}%` }}
+                  style={{ width: `${widthPct}%` }}
                   title={`${s.source}: ${s.count} keluhan (${s.percentage}%)`}
                   className={`${s.color} transition-all duration-500 hover:opacity-85 cursor-pointer`}
                   onClick={() => onSelectSource(activeFilter === s.source ? "ALL" : s.source)}
@@ -137,7 +108,7 @@ export default function SourceComparisonChart({
         </div>
         <div className="flex items-center justify-between text-[11px] text-slate-400">
           <span>0%</span>
-          <span>Total: <b>{total} Keluhan Masuk</b></span>
+          <span>Total: <b>{total} Keluhan Terdata</b></span>
           <span>100%</span>
         </div>
       </div>
@@ -168,12 +139,14 @@ export default function SourceComparisonChart({
               <div className="mt-2.5 w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
                 <div
                   className={`h-full ${item.color} rounded-full transition-all duration-500`}
-                  style={{ width: `${item.percentage}%` }}
+                  style={{ width: `${total > 0 ? (item.count / total) * 100 : 0}%` }}
                 />
               </div>
 
               <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                <span className="text-[10px] text-slate-400">Pangsa Pelaporan</span>
+                <span className="text-[10px] text-slate-400 truncate max-w-[130px]" title={item.description}>
+                  {item.description}
+                </span>
                 <span className="font-bold text-slate-700">{item.percentage}%</span>
               </div>
             </div>

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { UserSummary } from "@/types/database";
+import { VALID_SOURCES } from "@/lib/validation";
 
 interface ComplaintCreateModalProps {
   picList: UserSummary[];
@@ -37,7 +38,7 @@ export default function ComplaintCreateModal({
   const [customerName, setCustomerName] = useState("");
   const [customerContact, setCustomerContact] = useState("");
   const [daopOrStation, setDaopOrStation] = useState("Daop 1 Jakarta");
-  const [source, setSource] = useState("Telepon");
+  const [source, setSource] = useState<string>(VALID_SOURCES[0]);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [picId, setPicId] = useState("");
   const [description, setDescription] = useState("");
@@ -180,12 +181,9 @@ export default function ComplaintCreateModal({
                 onChange={(e) => setSource(e.target.value)}
                 className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
               >
-                <option value="Telepon">Telepon</option>
-                <option value="Email">Email</option>
-                <option value="Laporan Langsung">Laporan Langsung</option>
-                <option value="Nota Dinas">Nota Dinas</option>
-                <option value="Helpdesk Internal">Helpdesk Internal</option>
-                <option value="Survey Pelanggan">Survey Pelanggan</option>
+                {VALID_SOURCES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
             </div>
 

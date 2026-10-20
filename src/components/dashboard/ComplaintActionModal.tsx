@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { ComplaintData, UserSummary, Role, VerificationResult } from "@/types/database";
+import { VALID_SOURCES, normalizeComplaintSource } from "@/lib/validation";
 
 interface ComplaintActionModalProps {
   complaint: ComplaintData;
@@ -71,7 +72,9 @@ export default function ComplaintActionModal({
   const [adminCustomerName, setAdminCustomerName] = useState(complaint.customerName);
   const [adminCustomerContact, setAdminCustomerContact] = useState(complaint.customerContact || "");
   const [adminDaopOrStation, setAdminDaopOrStation] = useState(complaint.daopOrStation || "Kantor Pusat KAI Bandung");
-  const [adminSource, setAdminSource] = useState(complaint.source);
+  const [adminSource, setAdminSource] = useState<string>(
+    normalizeComplaintSource(complaint.source)
+  );
   const [adminDate, setAdminDate] = useState(
     complaint.date ? new Date(complaint.date).toISOString().split("T")[0] : ""
   );
@@ -285,6 +288,23 @@ export default function ComplaintActionModal({
           {/* SECTION 1: FORM ADMIN (EDIT DATA & PENUGASAN PIC)        */}
           {/* ======================================================== */}
           {currentUser.role === Role.ADMIN ? (
+            complaint.status === "TERVERIFIKASI" ? (
+              <div className="p-4 bg-emerald-50/70 rounded-xl border border-emerald-200 text-xs text-emerald-900 space-y-2">
+                <div className="flex items-center gap-2 font-bold">
+                  <span>🔒</span>
+                  <span>Keluhan Terverifikasi &amp; Terkunci (Mode Baca Saja)</span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  Data registrasi dan penugasan telah disahkan secara resmi oleh Verifikator. Sesuai tata kelola data SPKP KAI, keluhan yang telah berstatus Terverifikasi tidak dapat diubah melalui mekanisme edit biasa.
+                </p>
+                <div className="pt-2 text-slate-700 space-y-1 border-t border-emerald-200/60 text-xs">
+                  <p><b>Pelapor:</b> {complaint.customerName} {complaint.customerContact ? `(${complaint.customerContact})` : ""}</p>
+                  <p><b>Daop / Stasiun:</b> {complaint.daopOrStation || "-"}</p>
+                  <p><b>Uraian Keluhan:</b> {complaint.description}</p>
+                  <p><b>Petugas PIC:</b> {complaint.pic?.name || "Belum Ditugaskan"}</p>
+                </div>
+              </div>
+            ) : (
             <div className="space-y-4 p-5 bg-blue-50/40 rounded-xl border border-blue-200">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
@@ -360,12 +380,9 @@ export default function ComplaintActionModal({
                     onChange={(e) => setAdminSource(e.target.value)}
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    <option value="Telepon">Telepon</option>
-                    <option value="Email">Email</option>
-                    <option value="Laporan Langsung">Laporan Langsung</option>
-                    <option value="Nota Dinas">Nota Dinas</option>
-                    <option value="Helpdesk Internal">Helpdesk Internal</option>
-                    <option value="Survey Pelanggan">Survey Pelanggan</option>
+                    {VALID_SOURCES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -429,6 +446,7 @@ export default function ComplaintActionModal({
                 </button>
               </div>
             </div>
+            )
           ) : (
             /* Ringkasan Laporan untuk PIC / Verifikator */
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed space-y-2">
@@ -712,11 +730,11 @@ export default function ComplaintActionModal({
           {/* ======================================================== */}
           {/* SECTION 4: PANEL KEPUTUSAN VERIFIKATOR                   */}
           {/* ======================================================== */}
-          {currentUser.role === Role.VERIFIKATOR && (
+          {currentUser.role === Role.VERIFIKATOR && complaint.status === "MENUNGGU_VERIFIKASI" && (
             <div className="space-y-3 pt-4 border-t border-purple-100 bg-purple-50/60 p-4 rounded-xl border border-purple-200">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>🛡️</span> Panel Keputusan Verifikasi Mutu
+                  <span>🛡️</span> Panel Keputusan Verifikasi
                 </h4>
                 <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
                   Role Verifikator
@@ -731,7 +749,7 @@ export default function ComplaintActionModal({
 
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Hasil / Catatan Verifikasi Mutu <span className="text-rose-500 font-bold">* (Wajib jika menolak)</span>
+                  Hasil / Catatan Verifikasi <span className="text-rose-500 font-bold">* (Wajib jika menolak)</span>
                 </label>
                 <input
                   type="text"
