@@ -198,7 +198,7 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
       if (textRow.includes("Administrator SPKP")) foundCreatorName = true;
       if (textRow.includes("Management Representative (MR)")) foundMRRole = true;
       if (textRow.includes("Ir. Bambang Triyono (MR)")) foundMRName = true;
-      if (textRow.includes("Formulir Kendali Mutu FR.SM/TI/033.001")) foundFooterForm = true;
+      if (textRow.includes("Formulir Dokumentasi FR.SM/TI/033.001")) foundFooterForm = true;
       if (textRow.includes("Edisi: 002-2020")) foundFooterEdisi = true;
     });
 

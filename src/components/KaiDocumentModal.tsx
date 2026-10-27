@@ -81,7 +81,8 @@ export default function KaiDocumentModal({
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const yyyy = d.getFullYear();
-    return `FR.SM/TI/033.001/${mm}-${yyyy}`;
+    // Previously used FR.SM/TI/033.001 prefix; retained for document numbering logic
+    return `${mm}-${yyyy}`;
   });
 
   const [docDate, setDocDate] = useState(() => {
@@ -92,7 +93,7 @@ export default function KaiDocumentModal({
     });
   });
 
-  // Versi formulir standar KAI resmi ISO FR.SM/TI/033.001 edisi 002-2020
+  // Versi formulir standar KAI resmi ISO (edisi 002-2020)
   const [docVersion, setDocVersion] = useState("002-2020");
 
   const [managementRep, setManagementRep] = useState("Ir. Bambang Triyono (MR)");
@@ -241,7 +242,7 @@ export default function KaiDocumentModal({
   };
 
   // FITUR EKSPOR EXCEL
-  // Menghasilkan spreadsheet sesuai formulir FR.SM/TI/033.001
+  // Generate spreadsheet according to document format
   const handleExportExcelFromModal = () => {
     if (displayList.length === 0) return;
     exportComplaintsToExcel(displayList, {
@@ -433,7 +434,7 @@ export default function KaiDocumentModal({
             />
             <div>
               <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
-                <span>Dokumen Standar FR.SM/TI/033.001</span>
+                <span>Dokumen Standar</span>
                 <span className="text-[10px] bg-yellow-400 text-slate-950 font-black px-2 py-0.5 rounded">
                   TERBATAS
                 </span>
@@ -656,7 +657,7 @@ export default function KaiDocumentModal({
                   <div className="font-bold text-amber-900 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                      <span>Mode Revisi Dokumen Kendali Mutu</span>
+                      <span>Mode Revisi Dokumen Formulir Dokumentasi</span>
                     </div>
                     <span className="text-[10px] bg-amber-200 text-amber-900 font-mono px-2 py-0.5 rounded font-bold">
                       Induk: {docNumber}
@@ -684,7 +685,7 @@ export default function KaiDocumentModal({
               <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Pengaturan Header Formulir FR.SM/TI/033.001
+                    Pengaturan Header Formulir (untuk dokumen)
                   </h4>
                   {!isPublished && (
                     <button

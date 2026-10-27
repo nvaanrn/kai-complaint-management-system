@@ -111,31 +111,13 @@ export default function VerifierOverview({
               {totalRejectedVerifications}
             </span>
             <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md font-semibold bg-amber-50 text-amber-800">
-              Kendali Mutu
+              Formulir Dokumentasi
             </span>
           </div>
         </div>
       </section>
 
-      {/* Ketentuan Verifikasi */}
-      <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-purple-950">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-purple-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
-            🛡️
-          </div>
-          <div>
-            <span className="font-bold block">Kewenangan Pengendalian Mutu Verifikator:</span>
-            <span className="text-purple-800 text-[11px]">
-              Verifikator bertugas memverifikasi kesesuaian tindakan perbaikan dan foto bukti fisik di lapangan sebelum status keluhan diresmikan Terverifikasi (FR.SM/TI/033.001).
-            </span>
-          </div>
-        </div>
-        <div className="text-right shrink-0">
-          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-200">
-            ISO / SOP KAI
-          </span>
-        </div>
-      </div>
+
     </div>
   );
 }

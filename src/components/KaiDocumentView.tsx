@@ -16,7 +16,7 @@ export interface KaiDocumentViewProps {
 
 export default function KaiDocumentView({
   complaints,
-  documentNumber = "FR.SM/TI/033.001/10-2020",
+  documentNumber = "",
   documentDate = "12 Oktober 2020",
   version = "002-2020",
   managementRep = "Ir. Bambang Triyono (MR)",
@@ -359,7 +359,7 @@ export default function KaiDocumentView({
 
       {/* 4. FOOTER RESMI KAI */}
       <div className="kai-footer-block kai-keep-together mt-6 pt-2 border-t border-black flex items-center justify-between text-[9px] text-slate-600 font-mono">
-        <span>Formulir Kendali Mutu FR.SM/TI/033.001 &bull; PT Kereta Api Indonesia (Persero)</span>
+          <span>PT Kereta Api Indonesia (Persero)</span>
         <span>Edisi: {version}</span>
       </div>
     </div>

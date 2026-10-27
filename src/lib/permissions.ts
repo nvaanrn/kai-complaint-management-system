@@ -98,7 +98,7 @@ export const Permissions = {
     return user !== null && user.role === Role.ADMIN;
   },
 
-  // Penerbitan dokumen rekapitulasi audit FR.SM/TI/033.001: Hanya oleh ADMIN
+  // Penerbitan dokumen rekapitulasi audit: Hanya oleh ADMIN
   canGenerateDocument: (user: UserSession | null): boolean => {
     return user !== null && user.role === Role.ADMIN;
   },

@@ -243,7 +243,7 @@ interface KaiDocumentPdfProps {
 
 export function KaiDocumentPdf({
   complaints,
-  documentNumber = "FR.SM/TI/033.001/10-2020",
+  documentNumber = "",
   documentDate = "12 Oktober 2020",
   version = "002-2020",
   managementRep = "Ir. Bambang Triyono (MR)",
@@ -501,7 +501,7 @@ export function KaiDocumentPdf({
 
         {/* 4. FOOTER */}
         <View style={styles.footer} fixed>
-          <Text>Formulir Kendali Mutu FR.SM/TI/033.001 &bull; PT Kereta Api Indonesia (Persero)</Text>
+          <Text>PT Kereta Api Indonesia (Persero)</Text>
           <Text>Edisi: {version}</Text>
         </View>
       </Page>

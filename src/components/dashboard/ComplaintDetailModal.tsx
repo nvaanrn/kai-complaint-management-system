@@ -105,7 +105,7 @@ export default function ComplaintDetailModal({
           {/* Lifecycle Timeline */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
-              Siklus Hidup Tiket FR.SM/TI/033.001:
+              Siklus Hidup Tiket:
             </span>
             <div className="grid grid-cols-4 gap-1.5 text-center text-xs font-semibold">
               <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-900 border border-emerald-300">

@@ -67,7 +67,7 @@ export async function exportComplaintsToExcel(
   const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0");
   const currentYear = new Date().getFullYear();
 
-  const docNumber = opts.documentNumber || `FR.SM/TI/033.001/${currentMonth}-${currentYear}`;
+  const docNumber = opts.documentNumber || `DOC-${currentMonth}-${currentYear}`;
   const docDate =
     opts.documentDate ||
     new Date().toLocaleDateString("id-ID", {
@@ -547,19 +547,29 @@ export async function exportComplaintsToExcel(
 
   // 7. FOOTER DOKUMEN RESMI KAI — Sejajar dan proporsional persis PDF
   const footerRow = sigRow4 + 2;
-  ws.getRow(footerRow).height = 16;
 
-  ws.mergeCells(`A${footerRow}:F${footerRow}`);
-  const cellFootL = ws.getCell(`A${footerRow}`);
-  cellFootL.value = "Formulir Kendali Mutu FR.SM/TI/033.001 • PT Kereta Api Indonesia (Persero)";
-  cellFootL.font = { name: "Arial", size: 7.5, color: { argb: "FF64748B" } };
-  cellFootL.alignment = { horizontal: "left", vertical: "middle" };
+      // Row for Formulir Dokumentasi reference (appears before main footer)
+      const docRefRow = footerRow;
+      ws.mergeCells(`A${docRefRow}:J${docRefRow}`);
+      const cellDocRef = ws.getCell(`A${docRefRow}`);
+      cellDocRef.value = `Formulir Dokumentasi FR.SM/TI/033.001`;
+      cellDocRef.font = { name: "Arial", size: 7.5, color: { argb: "FF64748B" } };
+      cellDocRef.alignment = { horizontal: "center", vertical: "middle" };
+      // Move main footer one row down
+      const mainFooterRow = docRefRow + 1;
+      ws.getRow(mainFooterRow).height = 16;
+      ws.mergeCells(`A${mainFooterRow}:F${mainFooterRow}`);
+      const cellFootL = ws.getCell(`A${mainFooterRow}`);
+      cellFootL.value = "PT Kereta Api Indonesia (Persero)";
+      cellFootL.font = { name: "Arial", size: 7.5, color: { argb: "FF64748B" } };
+      cellFootL.alignment = { horizontal: "left", vertical: "middle" };
+      ws.mergeCells(`G${mainFooterRow}:J${mainFooterRow}`);
+      const cellFootR = ws.getCell(`G${mainFooterRow}`);
+      cellFootR.value = `Edisi: ${docVersion}`;
+      cellFootR.font = { name: "Arial", size: 7.5, color: { argb: "FF64748B" } };
+      cellFootR.alignment = { horizontal: "right", vertical: "middle" };
 
-  ws.mergeCells(`G${footerRow}:J${footerRow}`);
-  const cellFootR = ws.getCell(`G${footerRow}`);
-  cellFootR.value = `Edisi: ${docVersion}`;
-  cellFootR.font = { name: "Arial", size: 7.5, color: { argb: "FF64748B" } };
-  cellFootR.alignment = { horizontal: "right", vertical: "middle" };
+
 
   // 8. PENGATURAN CETAK (PRINT SETUP) PERSIS PDF
   ws.pageSetup = {
@@ -582,8 +592,8 @@ export async function exportComplaintsToExcel(
 
   // Header & Footer dinamis untuk pencetakan resmi
   ws.headerFooter = {
-    oddFooter:
-      '&L&"Arial"&7.5Formulir Kendali Mutu FR.SM/TI/033.001 • PT Kereta Api Indonesia (Persero)&R&"Arial"&7.5Halaman &P dari &N',
+    oddFooter: '&L&"Arial"7.5PT Kereta Api Indonesia (Persero) - Formulir Dokumentasi FR.SM/TI/033.001&R&"Arial"7.5Halaman &P dari &N',
+      '&L&"Arial"&7.5PT Kereta Api Indonesia (Persero)&R&"Arial"&7.5Halaman &P dari &N',
   };
 
   // Generate buffer untuk download atau ekspor

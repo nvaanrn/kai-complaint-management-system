@@ -65,9 +65,7 @@ export default function DashboardSidebar({
               />
             </div>
             <div>
-              <span className="text-[10px] font-bold tracking-widest text-blue-400 uppercase block">
-                FR.SM/TI/033.001
-              </span>
+
               <span className="text-xs font-black tracking-tight text-white block">
                 SPKP KAI PERSERO
               </span>

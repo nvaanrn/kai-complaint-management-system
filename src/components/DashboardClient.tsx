@@ -351,25 +351,26 @@ export default function DashboardClient({
 
         {/* Main Body */}
         <main className="p-4 sm:p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Hero Welcome Greeting */}
-          <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-sm relative overflow-hidden">
-            <div className="relative z-10 space-y-1.5">
-              <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-blue-200 border border-white/10">
-                PT Kereta Api Indonesia (Persero) &bull; Pengendalian Mutu
+          {activeMenu === "overview" && (
+            <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-sm relative overflow-hidden">
+              <div className="relative z-10 space-y-1.5">
+                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-blue-200 border border-white/10">
+                  PT Kereta Api Indonesia (Persero) &bull; Formulir Dokumentasi
+                </div>
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                  Selamat Datang, {currentUser.name || "Petugas SPKP"} 👋
+                </h1>
+                <p className="text-xs sm:text-sm text-blue-100/80 max-w-2xl leading-relaxed">
+                  {currentUser.role === Role.ADMIN &&
+                    "Anda memiliki kewenangan penuh mencatat keluhan, menentukan PIC, serta mengelola dokumen formulir dokumentasi."}
+                  {currentUser.role === Role.PIC &&
+                    `Terdapat ${countMyTasks} tiket keluhan yang ditugaskan ke Anda. Segera lakukan tindakan perbaikan, lampirkan bukti fisik, dan ajukan verifikasi.`}
+                  {currentUser.role === Role.VERIFIKATOR &&
+                    `Terdapat ${countVerif} tiket keluhan menunggu verifikasi. Validasi tindakan perbaikan dan foto bukti fisik dari PIC.`}
+                </p>
               </div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                Selamat Datang, {currentUser.name || "Petugas SPKP"} 👋
-              </h1>
-              <p className="text-xs sm:text-sm text-blue-100/80 max-w-2xl leading-relaxed">
-                {currentUser.role === Role.ADMIN &&
-                  "Anda memiliki kewenangan penuh mencatat keluhan, menentukan PIC, serta mengelola dokumen kendali mutu FR.SM/TI/033.001."}
-                {currentUser.role === Role.PIC &&
-                  `Terdapat ${countMyTasks} tiket keluhan yang ditugaskan ke Anda. Segera lakukan tindakan perbaikan, lampirkan bukti fisik, dan ajukan verifikasi.`}
-                {currentUser.role === Role.VERIFIKATOR &&
-                  `Terdapat ${countVerif} tiket keluhan menunggu verifikasi. Validasi tindakan perbaikan dan foto bukti fisik dari PIC.`}
-              </p>
             </div>
-          </div>
+          )}
 
           {/* Special Filter Banner jika sedang aktif */}
           {activeSpecialFilter && (

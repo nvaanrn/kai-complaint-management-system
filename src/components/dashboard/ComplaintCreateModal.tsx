@@ -91,7 +91,7 @@ export default function ComplaintCreateModal({
                 Formulir Registrasi Keluhan Pelanggan
               </span>
               <h3 id="create-modal-title" className="text-lg font-bold">
-                Catat Keluhan Baru (FR.SM/TI/033.001)
+                Catat Keluhan Baru
               </h3>
             </div>
           </div>

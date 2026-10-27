@@ -202,7 +202,7 @@ export default function ComplaintTable({
               : "Monitoring & Penanganan Keluhan Pelanggan"}
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Formulir kendali mutu FR.SM/TI/033.001 &bull; PT Kereta Api Indonesia (Persero)
+            Formulir dokumentasi FR.SM/TI/033.001 &bull; PT Kereta Api Indonesia (Persero)
           </p>
         </div>
 

@@ -59,14 +59,14 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-200 uppercase tracking-widest">
-              FR.SM/TI/033.001
-            </div>
+
+              
+
             <h1 className="text-xl font-bold text-slate-900 tracking-tight mt-2">
               Sistem Penanganan Keluhan (SPKP)
             </h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              Portal Internal Pengendalian Mutu Layanan Pelanggan KAI
+              Portal Internal Formulir Dokumentasi Layanan Pelanggan KAI
             </p>
           </div>
         </div>
