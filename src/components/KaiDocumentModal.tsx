@@ -248,6 +248,9 @@ export default function KaiDocumentModal({
       documentNumber: docNumber,
       documentDate: docDate,
       version: docVersion,
+      managementRep: managementRep,
+      creatorName: currentUser.name || "Administrator KAI",
+      pageInfo: "1 dari 1",
       filenamePrefix: `FR_SM_TI_033_001_${docNumber.replace(/[\/\\:]/g, "-")}`,
     });
   };

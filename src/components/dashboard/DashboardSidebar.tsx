@@ -135,7 +135,7 @@ export default function DashboardSidebar({
 
           {/* Verification Menu */}
                       {/* Verification Menu */}
-            <Link
+            <Link onClick={() => handleSelectMenu("verifications")}
               href="/dashboard?menu=verifications"
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 activeMenu === "verifications"

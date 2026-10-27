@@ -73,3 +73,8 @@ backups/
 # ==============================
 public/uploads/*
 !public/uploads/.gitkeep
+
+# ==============================
+# Temporary / Scratch
+# ==============================
+scratch/

@@ -16,8 +16,10 @@
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "@react-pdf/renderer": "^4.9.0",
+    "@types/exceljs": "^0.5.3",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.11.0",
+    "exceljs": "^4.4.0",
     "next": "14.2.15",
     "next-auth": "^4.24.15",
     "react": "^18",

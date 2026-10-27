@@ -533,6 +533,7 @@ export default function DashboardClient({
                   ? displayedComplaints.filter(isAssignedToCurrentUser)
                   : displayedComplaints;
               exportComplaintsToExcel(exportData, {
+                creatorName: currentUser.name || "Petugas SPKP KAI",
                 filenamePrefix:
                   currentUser.role === Role.PIC
                     ? `FR_SM_TI_033_001_Tugas_${(currentUser.name || "PIC").replace(/\s+/g, "_")}`
