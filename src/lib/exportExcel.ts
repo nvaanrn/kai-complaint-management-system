@@ -67,7 +67,7 @@ export async function exportComplaintsToExcel(
   const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0");
   const currentYear = new Date().getFullYear();
 
-  const docNumber = opts.documentNumber || `DOC-${currentMonth}-${currentYear}`;
+  const docNumber = opts.documentNumber || `FR.SM/TI/033.001/${currentMonth}-${currentYear}`;
   const docDate =
     opts.documentDate ||
     new Date().toLocaleDateString("id-ID", {
@@ -130,9 +130,10 @@ export async function exportComplaintsToExcel(
       extension: "png",
     });
 
+    // Cast to any to satisfy exceljs Anchor type requirements
     ws.addImage(logoId, {
-      tl: { col: 0, row: 0 },
-      br: { col: 2, row: 2 },
+      tl: { col: 0, row: 0 } as any,
+      br: { col: 2, row: 2 } as any,
     });
   } catch (err) {
     console.warn("Gagal menyematkan gambar logo KAI ke Excel, menggunakan teks cadangan:", err);
@@ -590,11 +591,10 @@ export async function exportComplaintsToExcel(
     printArea: `A1:J${footerRow}`,
   };
 
-  // Header & Footer dinamis untuk pencetakan resmi
-  ws.headerFooter = {
-    oddFooter: '&L&"Arial"7.5PT Kereta Api Indonesia (Persero) - Formulir Dokumentasi FR.SM/TI/033.001&R&"Arial"7.5Halaman &P dari &N',
-      '&L&"Arial"&7.5PT Kereta Api Indonesia (Persero)&R&"Arial"&7.5Halaman &P dari &N',
-  };
+  // Header & Footer untuk pencetakan
+ws.headerFooter = {
+  oddFooter: `&L&"Arial,Regular"&7.5PT Kereta Api Indonesia (Persero) - Formulir Dokumentasi FR.SM/TI/033.001/${currentMonth}-${currentYear}&R&"Arial,Regular"&7.5Halaman &P dari &N`,
+};
 
   // Generate buffer untuk download atau ekspor
   const buffer = await workbook.xlsx.writeBuffer();

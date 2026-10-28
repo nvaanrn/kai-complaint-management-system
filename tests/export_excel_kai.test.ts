@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { exportComplaintsToExcel } from "@/lib/exportExcel";
 import { ComplaintData } from "@/components/DashboardClient";
-import { ComplaintStatus, Role } from "@/types/database";
+import { ComplaintStatus, Role, VerificationResult } from "@/types/database";
 
 describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI", () => {
   const dummyComplaints: ComplaintData[] = [
@@ -25,11 +25,11 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
           id: "v-001",
           complaintId: "c-001",
           verifierId: "v-01",
-          result: "APPROVED",
+          result: VerificationResult.APPROVED,
           feedback: "Disetujui",
           cycle: 1,
           verifiedAt: new Date("2026-10-09T15:30:00Z"),
-          verifier: { id: "v-01", name: "Doni Verifikator", role: Role.VERIFIKATOR },
+          verifier: { name: "Doni Verifikator", role: Role.VERIFIKATOR },
         },
       ],
       createdAt: new Date("2026-09-22T10:00:00Z"),
@@ -55,11 +55,11 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
           id: "v-002",
           complaintId: "c-002",
           verifierId: "v-01",
-          result: "APPROVED",
+          result: VerificationResult.APPROVED,
           feedback: "HASIL DITERIMA",
           cycle: 1,
           verifiedAt: new Date("2026-10-09T14:00:00Z"),
-          verifier: { id: "v-01", name: "Doni Verifikator", role: Role.VERIFIKATOR },
+          verifier: { name: "Doni Verifikator", role: Role.VERIFIKATOR },
         },
       ],
       submittedAt: new Date("2026-10-09T14:00:00Z"),
