@@ -92,7 +92,7 @@
   - [x] Setup Vitest (`vitest.config.mts`) dengan path alias `@/*`.
   - [x] Suite Validasi Form: [tests/validation.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/validation.test.ts) (13 tests) menguji kewajiban nama pelapor, uraian keluhan, kelengkapan tindakan korektif & preventif PIC, dan catatan revisi verifikator.
   - [x] Suite Perhitungan Audit SLA: [tests/sla.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/sla.test.ts) (4 tests) menguji target SLA 24 jam, status aktif, overdue, dan ketepatan waktu.
-  - [x] Suite Hak Akses & Kewenangan (RBAC): [tests/auth_rbac.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/auth_rbac.test.ts) (14 tests) menguji matriks kewenangan Admin, PIC, dan Verifikator.
+  - [x] Suite Hak Akses & Kewenangan (RBAC): [tests/auth_rbac.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/auth_rbac.test.ts) (19 tests) menguji matriks kewenangan Admin, PIC, dan Verifikator (termasuk isolasi ekspor dan penerbitan dokumen resmi).
   - [x] Suite Penomoran Keluhan: [tests/complaintNumber.test.ts](file:///c:/Users/novaa/OneDrive/Documents/MAGANG/SPKP/tests/complaintNumber.test.ts) (5 tests) menguji format `CMP-YYYY-XXX` dan sequence increment.
 
 ---

@@ -816,35 +816,83 @@ export async function reviewReopenRequest(
   }
 }
 
-// Helper internal: Generate nomor dokumen FR.SM/TI/033.001 atomik
-// Menggunakan DocumentCounter untuk mencegah bentrok/tabrakan nomor saat dua proses berjalan bersamaan
+// Helper internal: Generate nomor dokumen resmi KAI atomik dengan format FR.SM/TI/033.XXX/MM-YYYY
+// Nomor unik urut (001, 002, 003, dst) diletakkan di bagian 033.XXX, bukan di belakang tahun
 export async function generateDocumentNumber(client: any, targetDate: Date = new Date()): Promise<string> {
   const year = targetDate.getFullYear();
   const month = targetDate.getMonth() + 1;
   const mm = String(month).padStart(2, "0");
+  const periodPattern = `/${mm}-${year}`;
 
-  const counter = await client.documentCounter.upsert({
-    where: { year_month: { year, month } },
-    create: { year, month, lastSequence: 1 },
-    update: { lastSequence: { increment: 1 } },
+  // 1. Ambil seluruh nomor dokumen eksisting di periode bulan & tahun yang sama
+  const existingDocs = await client.document.findMany({
+    where: {
+      documentNumber: {
+        contains: periodPattern,
+      },
+    },
+    select: { documentNumber: true },
   });
 
-  const baseNumber = `FR.SM/TI/033.001/${mm}-${year}`;
+  // 2. Evaluasi nomor urut tertinggi pada segmen 033.XXX
+  let maxSeq = 0;
+  const seqRegex = /^FR\.SM\/TI\/033\.(\d+)\//;
 
-  // Jika ini nomor urut 1 di bulan tersebut, cek apakah baseNumber sudah pernah ada di database
-  if (counter.lastSequence === 1) {
-    const existing = await client.document.findFirst({
-      where: { documentNumber: baseNumber },
-      select: { id: true },
-    });
-    if (!existing) {
-      return baseNumber;
+  for (const doc of existingDocs) {
+    const match = doc.documentNumber.match(seqRegex);
+    if (match) {
+      const seq = parseInt(match[1], 10);
+      if (!isNaN(seq) && seq > maxSeq) {
+        maxSeq = seq;
+      }
     }
   }
 
-  // Jika nomor urut > 1 atau baseNumber sudah pernah digunakan sebelumnya, beri akhiran nomor urut batch
-  const seqSuffix = String(counter.lastSequence).padStart(2, "0");
-  return `${baseNumber}-${seqSuffix}`;
+  // 3. Ambil / perbarui atomic counter dari tabel DocumentCounter
+  const counterRecord = await client.documentCounter.findUnique({
+    where: { year_month: { year, month } },
+  });
+
+  let nextSeq = maxSeq > 0 ? maxSeq + 1 : 1;
+  if (counterRecord && counterRecord.lastSequence >= nextSeq) {
+    nextSeq = counterRecord.lastSequence + 1;
+  }
+
+  await client.documentCounter.upsert({
+    where: { year_month: { year, month } },
+    create: { year, month, lastSequence: nextSeq },
+    update: { lastSequence: nextSeq },
+  });
+
+  // Format penomoran resmi baku: FR.SM/TI/033.XXX/MM-YYYY
+  const seqStr = String(nextSeq).padStart(3, "0");
+  return `FR.SM/TI/033.${seqStr}/${mm}-${year}`;
+}
+
+// Server Action: Dapatkan nomor dokumen berikutnya yang tersedia tanpa tabrakan
+export async function getNextAvailableDocumentNumberAction(
+  targetDate?: string | Date
+): Promise<ActionResponse> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { success: false, error: "Sesi tidak valid.", code: "UNAUTHENTICATED" };
+  }
+
+  try {
+    const d = targetDate ? new Date(targetDate) : new Date();
+    const nextDocNumber = await generateDocumentNumber(prisma, d);
+    return {
+      success: true,
+      data: nextDocNumber,
+    };
+  } catch (error: any) {
+    console.error("Error generating next document number:", error);
+    return {
+      success: false,
+      error: error.message || "Gagal menghasilkan nomor dokumen berikutnya.",
+      code: "INTERNAL_ERROR",
+    };
+  }
 }
 
 // 8. Server Action: Terbitkan Dokumen Rekapitulasi FR.SM/TI/033.001 (Khusus Admin)
@@ -881,7 +929,6 @@ export async function createDocumentBatch(data: {
       let revisionNumber = 0;
       let parentDocId: string | null = null;
       let revisionReasonStr: string | null = null;
-      const versionStr = data.version?.trim() || "002-2020";
 
       if (data.parentDocumentId) {
         // Alur Dokumen Revisi
@@ -922,15 +969,18 @@ export async function createDocumentBatch(data: {
           });
 
           if (existing) {
-            throw new Error(
-              `Dokumen dengan nomor ${docNumber} sudah pernah diterbitkan. Dokumen yang sudah diterbitkan tidak boleh ditimpa. Gunakan mekanisme revisi jika ingin memperbarui dokumen.`
-            );
+            // Jika nomor dokumen yang dimasukkan sudah pernah terbit, otomatis alokasikan nomor urut batch berikutnya agar tidak gagal/bentrok
+            docNumber = await generateDocumentNumber(tx, docDate);
           }
         } else {
           // Penomoran otomatis aman terhadap konkurensi
           docNumber = await generateDocumentNumber(tx, docDate);
         }
       }
+
+      // Hitung versi dinamis baku format 00X-YYYY
+      const defaultDynamicVersion = `${String(revisionNumber + 1).padStart(3, "0")}-${docDate.getFullYear()}`;
+      const versionStr = data.version?.trim() || defaultDynamicVersion;
 
       // 3. Ambil data keluhan beserta verifikator dan PIC untuk dibekukan
       const complaints = await tx.complaint.findMany({

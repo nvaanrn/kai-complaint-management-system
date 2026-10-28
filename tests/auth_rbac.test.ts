@@ -106,6 +106,22 @@ describe("Unit Test: Role-Based Access Control (RBAC Permissions)", () => {
     });
   });
 
+  describe("Kewenangan Penerbitan & Ekspor Dokumen Resmi (canGenerateDocument & canExportDocument)", () => {
+    it("Hanya Admin yang berwenang menerbitkan dokumen rekapitulasi resmi", () => {
+      expect(Permissions.canGenerateDocument(adminUser)).toBe(true);
+      expect(Permissions.canGenerateDocument(picUser1)).toBe(false);
+      expect(Permissions.canGenerateDocument(verifikatorUser)).toBe(false);
+      expect(Permissions.canGenerateDocument(null)).toBe(false);
+    });
+
+    it("Hanya Admin yang berwenang mengekspor berkas resmi FR.SM/TI/033.001", () => {
+      expect(Permissions.canExportDocument(adminUser)).toBe(true);
+      expect(Permissions.canExportDocument(picUser1)).toBe(false);
+      expect(Permissions.canExportDocument(verifikatorUser)).toBe(false);
+      expect(Permissions.canExportDocument(null)).toBe(false);
+    });
+  });
+
   describe("Validasi Penugasan PIC: Admin DILARANG Ditugaskan Sebagai PIC", () => {
     it("Hanya pengguna dengan Role.PIC yang sah menjadi petugas PIC", () => {
       const isEligiblePic = (u: { role: Role }) => u.role === Role.PIC;

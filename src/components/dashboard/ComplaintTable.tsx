@@ -21,6 +21,7 @@ interface ComplaintTableProps {
   onOpenAction: (item: ComplaintData) => void;
   onDeleteComplaint?: (item: ComplaintData) => void;
   onExportExcel?: () => void;
+  onOpenDocModal?: () => void;
   isAssignedToCurrentUser: (item: ComplaintData) => boolean;
 }
 
@@ -40,6 +41,7 @@ export default function ComplaintTable({
   onOpenAction,
   onDeleteComplaint,
   onExportExcel,
+  onOpenDocModal,
   isAssignedToCurrentUser,
 }: ComplaintTableProps) {
   // Pagination State
@@ -201,25 +203,40 @@ export default function ComplaintTable({
               ? "Daftar Keluhan Terbaru"
               : "Monitoring & Penanganan Keluhan Pelanggan"}
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Formulir dokumentasi FR.SM/TI/033.001 &bull; PT Kereta Api Indonesia (Persero)
-          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
-          {/* Ekspor Excel Button — tampil untuk semua role */}
-          {onExportExcel && (
-            <button
-              onClick={onExportExcel}
-              type="button"
-              title="Unduh rekapitulasi keluhan (.xlsx)"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs active:scale-95"
-            >
-              <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span>Ekspor Rekap Excel</span>
-            </button>
+          {/* Tombol Aksi Dokumen Resmi & Ekspor — Khusus Role ADMIN */}
+          {currentUser.role === Role.ADMIN && (
+            <div className="flex items-center gap-2">
+              {onOpenDocModal && (
+                <button
+                  onClick={onOpenDocModal}
+                  type="button"
+                  title="Penerbitan dan pengesahan dokumen resmi KAI FR.SM/TI/033.001"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition cursor-pointer shadow-2xs active:scale-95"
+                >
+                  <svg className="w-3.5 h-3.5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Terbitkan Dokumen</span>
+                </button>
+              )}
+
+              {onExportExcel && (
+                <button
+                  onClick={onExportExcel}
+                  type="button"
+                  title="Unduh rekapitulasi keluhan (.xlsx)"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs active:scale-95"
+                >
+                  <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Ekspor Rekap Excel</span>
+                </button>
+              )}
+            </div>
           )}
 
           {/* Toggle PIC Filter */}
@@ -419,6 +436,7 @@ export default function ComplaintTable({
                     <StatusBadge
                       status={item.status}
                       verifications={item.verifications}
+                      reopenRequests={item.reopenRequests}
                     />
                   </td>
 

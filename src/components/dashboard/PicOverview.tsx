@@ -179,11 +179,6 @@ export default function PicOverview({
             </span>
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-200">
-            SOP Mutu KAI
-          </span>
-        </div>
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { ComplaintData, Role, VerificationResult } from "@/types/database";
 import {
   createDocumentBatch,
   getPublishedDocument,
   getPublishedDocumentsList,
+  getNextAvailableDocumentNumberAction,
 } from "@/app/actions/complaints";
 import { exportComplaintsToExcel } from "@/lib/exportExcel";
 import KaiDocumentView from "./KaiDocumentView";
@@ -18,12 +19,14 @@ interface KaiDocumentModalProps {
     name?: string | null;
     role?: string;
   };
+  onDocumentPublished?: () => void;
 }
 
 export default function KaiDocumentModal({
   complaints,
   onClose,
   currentUser,
+  onDocumentPublished,
 }: KaiDocumentModalProps) {
   // Helper untuk memetakan snapshot beku ke struktur data tampilan ComplaintData
   function mapSnapshotToComplaints(snapshotData: any[]): ComplaintData[] {
@@ -92,11 +95,12 @@ export default function KaiDocumentModal({
     });
   });
 
-  // Versi formulir standar KAI resmi ISO (edisi 002-2020)
-  const [docVersion, setDocVersion] = useState("002-2020");
+  // Versi formulir standar KAI resmi ISO (format dinamis 001-YYYY)
+  const currentYear = new Date().getFullYear();
+  const [docVersion, setDocVersion] = useState(`001-${currentYear}`);
 
   const [managementRep, setManagementRep] = useState("Ir. Bambang Triyono (MR)");
-  const [isPreview, setIsPreview] = useState(false);
+  const [isPreview, setIsPreview] = useState(currentUser.role !== Role.ADMIN);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
@@ -107,27 +111,8 @@ export default function KaiDocumentModal({
   const [revisionReason, setRevisionReason] = useState("");
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // Muat daftar arsip dokumen resmi jika ada di database
-  useEffect(() => {
-    let isMounted = true;
-    async function loadArchives() {
-      try {
-        const res = await getPublishedDocumentsList();
-        if (res.success && res.data && isMounted) {
-          setPublishedDocsList(res.data);
-        }
-      } catch (err) {
-        console.error("Gagal memuat daftar arsip dokumen:", err);
-      }
-    }
-    loadArchives();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   // Handler memilih dokumen dari arsip resmi
-  const handleSelectArchive = async (archiveId: string) => {
+  const handleSelectArchive = useCallback(async (archiveId: string) => {
     setSelectedArchiveId(archiveId);
     setIsRevisionMode(false);
     setRevisionReason("");
@@ -136,6 +121,14 @@ export default function KaiDocumentModal({
       // Kembali ke mode pembuatan dokumen aktif
       setIsPublished(false);
       setArchivedSnapshot(null);
+      try {
+        const resNext = await getNextAvailableDocumentNumberAction();
+        if (resNext.success && resNext.data) {
+          setDocNumber(resNext.data);
+        }
+      } catch (err) {
+        console.error("Gagal memperbarui nomor dokumen:", err);
+      }
       return;
     }
 
@@ -145,7 +138,7 @@ export default function KaiDocumentModal({
       if (res.success && res.data) {
         const doc = res.data;
         setDocNumber(doc.documentNumber);
-        setDocVersion(doc.version || "002-2020");
+        setDocVersion(doc.version || `001-${currentYear}`);
         setManagementRep(doc.managementRep || "Management Representative KAI");
         if (doc.documentDate) {
           setDocDate(
@@ -190,7 +183,40 @@ export default function KaiDocumentModal({
         message: "Gagal memuat rincian arsip dokumen resmi.",
       });
     }
-  };
+  }, [currentYear]);
+
+  // Muat daftar arsip dokumen resmi jika ada di database & inisialisasi nomor dokumen unik
+  useEffect(() => {
+    let isMounted = true;
+    async function loadData() {
+      try {
+        const [resArchives, resNextNum] = await Promise.all([
+          getPublishedDocumentsList(),
+          getNextAvailableDocumentNumberAction(),
+        ]);
+
+        if (isMounted) {
+          if (resArchives.success && resArchives.data) {
+            setPublishedDocsList(resArchives.data);
+            // Jika non-admin (PIC / Verifikator), otomatis buka dokumen arsip terbit terbaru
+            if (currentUser.role !== Role.ADMIN && resArchives.data.length > 0) {
+              handleSelectArchive(resArchives.data[0].id);
+            }
+          }
+
+          if (resNextNum.success && resNextNum.data && currentUser.role === Role.ADMIN) {
+            setDocNumber(resNextNum.data);
+          }
+        }
+      } catch (err) {
+        console.error("Gagal memuat data awal dokumen:", err);
+      }
+    }
+    loadData();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser.role, handleSelectArchive]);
 
   const toggleSelect = (id: string) => {
     if (isPublished) return; // Terkunci jika arsip terbit
@@ -367,7 +393,7 @@ export default function KaiDocumentModal({
       if (result.success && result.data) {
         const createdDoc = result.data;
         setDocNumber(createdDoc.documentNumber);
-        setDocVersion(createdDoc.version || "002-2020");
+        setDocVersion(createdDoc.version || `001-${currentYear}`);
         if (createdDoc.documentDate) {
           setDocDate(
             new Date(createdDoc.documentDate).toLocaleDateString("id-ID", {
@@ -401,6 +427,7 @@ export default function KaiDocumentModal({
         if (resArchives.success && resArchives.data) {
           setPublishedDocsList(resArchives.data);
         }
+        onDocumentPublished?.();
       } else {
         setNotification({
           type: "error",
@@ -443,10 +470,19 @@ export default function KaiDocumentModal({
             />
             <div>
               <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
-                <span>Dokumen Standar FR.SM/TI/033.001</span>
+                <span>
+                  {currentUser.role === Role.ADMIN
+                    ? "Penerbitan & Dokumen Resmi FR.SM/TI/033.001"
+                    : "Arsip Dokumen Resmi FR.SM/TI/033.001"}
+                </span>
                 <span className="text-[10px] bg-yellow-400 text-slate-950 font-black px-2 py-0.5 rounded">
                   TERBATAS
                 </span>
+                {currentUser.role !== Role.ADMIN && (
+                  <span className="text-[10px] bg-slate-700 text-slate-200 font-bold px-2 py-0.5 rounded shadow-2xs">
+                    MODE BACA SAJA
+                  </span>
+                )}
                 {isPublished && (
                   <span className="text-[10px] bg-emerald-500 text-white font-bold px-2 py-0.5 rounded shadow-2xs">
                     TERKUNCI / TERBIT
@@ -487,27 +523,31 @@ export default function KaiDocumentModal({
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => setIsPreview(false)}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 rounded-xl transition cursor-pointer"
-                >
-                  &larr; Ubah Pilihan
-                </button>
+                {currentUser.role === Role.ADMIN && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPreview(false)}
+                    className="px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 rounded-xl transition cursor-pointer"
+                  >
+                    &larr; Ubah Pilihan
+                  </button>
+                )}
 
-                {/* Tombol Ekspor Excel */}
-                <button
-                  type="button"
-                  onClick={handleExportExcelFromModal}
-                  disabled={displayList.length === 0}
-                  className="px-3 py-1.5 text-xs font-semibold text-emerald-100 bg-emerald-700 hover:bg-emerald-600 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  title="Unduh format spreadsheet Excel persis formulir KAI (.xlsx)"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>Ekspor Excel (.xlsx)</span>
-                </button>
+                {/* Tombol Ekspor Excel (Khusus Admin) */}
+                {currentUser.role === Role.ADMIN && (
+                  <button
+                    type="button"
+                    onClick={handleExportExcelFromModal}
+                    disabled={displayList.length === 0}
+                    className="px-3 py-1.5 text-xs font-semibold text-emerald-100 bg-emerald-700 hover:bg-emerald-600 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Unduh format spreadsheet Excel persis formulir KAI (.xlsx)"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Ekspor Excel (.xlsx)</span>
+                  </button>
+                )}
 
                 {/* Tombol Unduh PDF Resmi */}
                 <button
@@ -542,6 +582,9 @@ export default function KaiDocumentModal({
                   <button
                     type="button"
                     onClick={() => {
+                      const parentDoc = publishedDocsList.find((d) => d.id === selectedArchiveId);
+                      const nextRevNumber = (parentDoc?.revisionNumber ?? 0) + 1;
+                      setDocVersion(`${String(nextRevNumber + 1).padStart(3, "0")}-${currentYear}`);
                       setIsRevisionMode(true);
                       setIsPublished(false);
                       setIsPreview(false);
@@ -864,6 +907,45 @@ export default function KaiDocumentModal({
                 </div>
               </div>
             </div>
+
+          {/* Selector Arsip Dokumen Terbit di Mode Pratinjau */}
+          {isPreview && publishedDocsList.length > 0 && (
+            <div className="mb-4 p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex flex-wrap items-center justify-between gap-3 print:hidden">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-blue-950">Pilih Arsip Dokumen Terbit:</span>
+                <select
+                  value={selectedArchiveId}
+                  onChange={(e) => handleSelectArchive(e.target.value)}
+                  className="px-3 py-1.5 text-xs border border-blue-300 rounded-lg bg-white text-slate-800 font-medium cursor-pointer"
+                >
+                  {currentUser.role === Role.ADMIN && (
+                    <option value="">-- Mode Konsep Dokumen Baru --</option>
+                  )}
+                  {publishedDocsList.map((doc) => (
+                    <option key={doc.id} value={doc.id}>
+                      {doc.documentNumber} {doc.revisionNumber > 0 ? `(Rev. ${doc.revisionNumber})` : ""} - Versi: {doc.version || "001"} ({doc.totalComplaints} keluhan)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {currentUser.role !== Role.ADMIN && (
+                <span className="text-[11px] text-blue-700 font-medium">
+                  Salinan arsip resmi terbit PT Kereta Api Indonesia (Persero)
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Banner jika non-admin dan belum ada dokumen yang diterbitkan */}
+          {currentUser.role !== Role.ADMIN && publishedDocsList.length === 0 && (
+            <div className="mb-4 p-6 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-2 print:hidden">
+              <div className="text-3xl">📂</div>
+              <h4 className="text-sm font-bold text-slate-800">Belum Ada Dokumen Resmi yang Diterbitkan</h4>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Administrator SPKP belum menerbitkan dokumen rekapitulasi audit FR.SM/TI/033.001 resmi. Arsip dokumen akan tersedia di sini setelah disahkan dan dikunci.
+              </p>
+            </div>
+          )}
 
           {/* PRATINJAU & AREA CETAK DOKUMEN BAKU PERSIS STANDAR KAI */}
           <div

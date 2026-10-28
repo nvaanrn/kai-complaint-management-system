@@ -154,16 +154,25 @@ export default function DashboardSidebar({
               )}
             </Link>
 
-          {/* Dokumen Cetak KAI */}
+          {/* Penerbitan Dokumen (Admin) / Arsip Dokumen Resmi (PIC & Verifikator) */}
           <button
             type="button"
             onClick={onOpenDocModal}
             className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white transition cursor-pointer"
+            title={
+              currentUser.role === Role.ADMIN
+                ? "Penerbitan, kelola, dan cetak dokumen resmi KAI"
+                : "Lihat arsip dokumen resmi KAI yang telah diterbitkan (Read-Only)"
+            }
           >
             <svg className="w-4 h-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span>Dokumen Cetak KAI</span>
+            <span>
+              {currentUser.role === Role.ADMIN
+                ? "Penerbitan & Dokumen Resmi"
+                : "Arsip Dokumen Resmi"}
+            </span>
           </button>
 
 

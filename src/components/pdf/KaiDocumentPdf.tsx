@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   metaLabel: {
-    width: "42%",
+    width: "35%",
     fontSize: 7,
     fontFamily: "Helvetica",
     borderRightWidth: 1,
@@ -129,8 +129,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   metaValue: {
-    width: "58%",
-    fontSize: 7,
+    width: "65%",
+    fontSize: 6.5,
     fontFamily: "Helvetica-Bold",
     paddingVertical: 3,
     paddingHorizontal: 4,
@@ -245,24 +245,24 @@ export function KaiDocumentPdf({
   complaints,
   documentNumber = "FR.SM/TI/033.001/10-2020",
   documentDate = "12 Oktober 2020",
-  version = "002-2020",
+  version = `001-${new Date().getFullYear()}`,
   managementRep = "Ir. Bambang Triyono (MR)",
   creatorName = "Petugas SPKP KAI",
   logoUrl,
 }: KaiDocumentPdfProps) {
-  // Lebar kolom persis proporsional standar KAI
+  // Lebar kolom persis proporsional standar KAI (disesuaikan agar Hasil Verifikasi tidak meluber)
   const colWidths = {
-    no: "3.5%",
-    tanggal: "8.5%",
-    pelanggan: "12%",
-    sumber: "9%",
-    deskripsi: "20.5%",
-    tindakan: "19.5%",
-    verifGroup: "17.5%",
-    verifTgl: "6%",
-    verifPic: "6%",
-    verifHasil: "5.5%",
-    keterangan: "9.5%",
+    no: "3%",
+    tanggal: "7.5%",
+    pelanggan: "11.5%",
+    sumber: "7.5%",
+    deskripsi: "19%",
+    tindakan: "18.5%",
+    verifGroup: "24.5%",
+    verifTgl: "5.5%",
+    verifPic: "6.5%",
+    verifHasil: "12.5%",
+    keterangan: "8.5%",
   };
 
   return (
@@ -342,13 +342,13 @@ export function KaiDocumentPdf({
                 <Text>Verification</Text>
               </View>
               <View style={{ flexDirection: "row", flex: 1 }}>
-                <View style={{ width: "34.285%", borderRightWidth: 0.5, borderRightColor: "#000000", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
+                <View style={{ width: "22.45%", borderRightWidth: 0.5, borderRightColor: "#000000", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
                   <Text>Tgl</Text>
                 </View>
-                <View style={{ width: "34.285%", borderRightWidth: 0.5, borderRightColor: "#000000", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
+                <View style={{ width: "26.53%", borderRightWidth: 0.5, borderRightColor: "#000000", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
                   <Text>PIC</Text>
                 </View>
-                <View style={{ width: "31.43%", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
+                <View style={{ width: "51.02%", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
                   <Text>Hasil</Text>
                 </View>
               </View>
@@ -435,20 +435,24 @@ export function KaiDocumentPdf({
                 <View style={[styles.td, { width: colWidths.verifPic, alignItems: "center" }]}>
                   <Text>{picName}</Text>
                 </View>
-                <View style={[styles.td, { width: colWidths.verifHasil, alignItems: "center", justifyContent: "center" }]}>
+                <View style={[styles.td, { width: colWidths.verifHasil, alignItems: "center", justifyContent: "center", overflow: "hidden", padding: 2 }]}>
                   <View style={{
                     backgroundColor: item.status === "TERVERIFIKASI" ? "#d1fae5" : "#f1f5f9",
                     borderWidth: item.status === "TERVERIFIKASI" ? 0.5 : 0,
                     borderColor: "#6ee7b7",
                     paddingVertical: 2,
-                    paddingHorizontal: 3,
-                    borderRadius: 2
+                    paddingHorizontal: 2,
+                    borderRadius: 2,
+                    width: "100%",
+                    maxWidth: "100%",
                   }}>
                     <Text style={{
-                      fontSize: 5,
+                      fontSize: 4.8,
                       fontFamily: "Helvetica-Bold",
                       color: item.status === "TERVERIFIKASI" ? "#064e3b" : "#1e293b",
-                      textTransform: "uppercase"
+                      textTransform: "uppercase",
+                      textAlign: "center",
+                      lineHeight: 1.25,
                     }}>
                       {verificationResult}
                     </Text>
@@ -499,11 +503,7 @@ export function KaiDocumentPdf({
           </View>
         </View>
 
-        {/* 4. FOOTER */}
-        <View style={styles.footer} fixed>
-          <Text>PT Kereta Api Indonesia (Persero)</Text>
-          <Text>Edisi: {version}</Text>
-        </View>
+        {/* Footer dihapus sesuai permintaan */}
       </Page>
     </Document>
   );

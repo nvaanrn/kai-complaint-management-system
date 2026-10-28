@@ -6,12 +6,16 @@ interface StatusBadgeProps {
   verifications?: Array<{
     result: VerificationResult | string;
   }>;
+  reopenRequests?: Array<{
+    status: string;
+  }>;
   className?: string;
 }
 
-export default function StatusBadge({ status, verifications, className = "" }: StatusBadgeProps) {
+export default function StatusBadge({ status, verifications, reopenRequests, className = "" }: StatusBadgeProps) {
   const lastVerif = verifications && verifications.length > 0 ? verifications[0] : null;
   const isRejectedBefore = lastVerif?.result === VerificationResult.REJECTED;
+  const hasPendingReopen = reopenRequests && reopenRequests.some((r) => r.status === "PENDING");
 
   switch (status) {
     case ComplaintStatus.BELUM_DITANGANI:
@@ -60,13 +64,24 @@ export default function StatusBadge({ status, verifications, className = "" }: S
 
     case ComplaintStatus.TERVERIFIKASI:
       return (
-        <span
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90 ${className}`}
-          title="Telah diverifikasi dan disetujui resmi oleh verifikator"
-        >
-          <span className="text-emerald-600 font-bold" aria-hidden="true">✓</span>
-          <span>Terverifikasi</span>
-        </span>
+        <div className={`flex flex-col items-start gap-1 ${className}`}>
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/90"
+            title="Telah diverifikasi dan disetujui resmi oleh verifikator"
+          >
+            <span className="text-emerald-600 font-bold" aria-hidden="true">✓</span>
+            <span>Terverifikasi</span>
+          </span>
+          {hasPendingReopen && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 animate-pulse"
+              title="Permohonan pembukaan kembali keluhan sedang menunggu persetujuan Admin"
+            >
+              <span>🔄</span>
+              <span>Reopen Pending</span>
+            </span>
+          )}
+        </div>
       );
 
     default:

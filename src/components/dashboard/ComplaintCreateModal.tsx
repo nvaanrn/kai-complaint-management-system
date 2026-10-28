@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { UserSummary, Role } from "@/types/database";
-import { VALID_SOURCES } from "@/lib/validation";
+import { VALID_SOURCES, VALID_CATEGORIES } from "@/lib/validation";
 
 interface ComplaintCreateModalProps {
   picList: UserSummary[];
@@ -16,9 +16,11 @@ interface ComplaintCreateModalProps {
     date: string;
     picId?: string;
     description: string;
+    category?: string;
   }) => Promise<void>;
   isLoading: boolean;
 }
+   // duplicate block removed
 
 export default function ComplaintCreateModal({
   picList,
@@ -42,6 +44,7 @@ export default function ComplaintCreateModal({
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [picId, setPicId] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState<string>("");
   const [formError, setFormError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,6 +67,7 @@ export default function ComplaintCreateModal({
       date,
       picId: picId || undefined,
       description: description.trim(),
+      category: category || undefined,
     });
   };
 
@@ -171,7 +175,25 @@ export default function ComplaintCreateModal({
               </select>
             </div>
 
-            {/* Sumber Keluhan */}
+            {/* Kategori Keluhan */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Kategori Keluhan
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
+            >
+              <option value="">-- Pilih Kategori (opsional) --</option>
+              {VALID_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Sumber Keluhan */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Sumber / Saluran Keluhan

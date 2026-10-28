@@ -18,7 +18,7 @@ export default async function DashboardPage() {
   let dbError: string | null = null;
 
   try {
-    // 1. Ambil data keluhan beserta relasi PIC dan Verifikasi via Prisma
+    // 1. Ambil data keluhan beserta relasi PIC, Verifikasi, dan Permohonan Reopen via Prisma
     const complaintsData = await prisma.complaint.findMany({
       orderBy: { createdAt: "desc" },
       include: {
@@ -30,6 +30,17 @@ export default async function DashboardPage() {
           include: {
             verifier: {
               select: { name: true, role: true },
+            },
+          },
+        },
+        reopenRequests: {
+          orderBy: { requestedAt: "desc" },
+          include: {
+            requester: {
+              select: { id: true, name: true, email: true, role: true },
+            },
+            reviewer: {
+              select: { id: true, name: true, email: true, role: true },
             },
           },
         },

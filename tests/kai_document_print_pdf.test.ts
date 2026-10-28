@@ -67,14 +67,14 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
   describe("1. Kesamaan Proporsi dan Struktur Kolom Print & PDF", () => {
     it("Proporsi lebar kolom pada dokumen KAI FR.SM/TI/033.001 harus total 100%", () => {
       const colWidths = {
-        no: 3.5,
-        tanggal: 8.5,
-        pelanggan: 12.0,
-        sumber: 9.0,
-        deskripsi: 20.5,
-        tindakan: 19.5,
-        verifGroup: 17.5,
-        keterangan: 9.5,
+        no: 3.0,
+        tanggal: 7.5,
+        pelanggan: 11.5,
+        sumber: 7.5,
+        deskripsi: 19.0,
+        tindakan: 18.5,
+        verifGroup: 24.5,
+        keterangan: 8.5,
       };
 
       const sumMainCols =
@@ -91,9 +91,9 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
 
       // Sub-kolom Verification (Tgl, PIC, Hasil)
       const verifSubCols = {
-        verifTgl: 6.0,
-        verifPic: 6.0,
-        verifHasil: 5.5,
+        verifTgl: 5.5,
+        verifPic: 6.5,
+        verifHasil: 12.5,
       };
       const sumVerifSubCols =
         verifSubCols.verifTgl + verifSubCols.verifPic + verifSubCols.verifHasil;
@@ -422,12 +422,9 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
       const generateDocNumberMock = async (date: Date) => {
         const mm = String(date.getMonth() + 1).padStart(2, "0");
         const yyyy = date.getFullYear();
-        const base = `FR.SM/TI/033.001/${mm}-${yyyy}`;
         const counter = await atomicCounterUpsert();
-        if (counter.lastSequence === 1) {
-          return base;
-        }
-        return `${base}-${String(counter.lastSequence).padStart(2, "0")}`;
+        const seqStr = String(counter.lastSequence).padStart(3, "0");
+        return `FR.SM/TI/033.${seqStr}/${mm}-${yyyy}`;
       };
 
       const now = new Date("2026-10-18T00:00:00Z");
@@ -440,7 +437,7 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
 
       expect(numA).not.toBe(numB);
       expect([numA, numB]).toContain("FR.SM/TI/033.001/10-2026");
-      expect([numA, numB]).toContain("FR.SM/TI/033.001/10-2026-02");
+      expect([numA, numB]).toContain("FR.SM/TI/033.002/10-2026");
     });
 
     it("6. Kegagalan transaksi tidak meninggalkan dokumen parsial", async () => {

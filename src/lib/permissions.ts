@@ -102,4 +102,9 @@ export const Permissions = {
   canGenerateDocument: (user: UserSession | null): boolean => {
     return user !== null && user.role === Role.ADMIN;
   },
+
+  // Ekspor berkas resmi FR.SM/TI/033.001 (Excel & PDF): Hanya oleh ADMIN
+  canExportDocument: (user: UserSession | null): boolean => {
+    return user !== null && user.role === Role.ADMIN;
+  },
 };

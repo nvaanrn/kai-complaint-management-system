@@ -120,6 +120,10 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
     // Nomor dokumen default harus menggunakan format resmi FR.SM/TI/033.001/MM-YYYY
     expect(ws.getCell("H1").value?.toString()).toMatch(/FR\.SM\/TI\/033\.001\/\d{2}-\d{4}/);
 
+    // Versi default harus menggunakan format dinamis 001-YYYY jika tidak dispesifikasikan
+    const currentYear = new Date().getFullYear();
+    expect(ws.getCell("H3").value?.toString()).toContain(`001-${currentYear}`);
+
     // Baris 6 & 7: Header kolom tabel
     expect(ws.getCell("A6").value).toBe("No");
     expect(ws.getCell("G6").value).toBe("Verification");
@@ -201,6 +205,8 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
       if (textRow.includes("Administrator SPKP")) foundCreatorName = true;
       if (textRow.includes("Management Representative (MR)")) foundMRRole = true;
       if (textRow.includes("Ir. Bambang Triyono (MR)")) foundMRName = true;
+      // Footer teks di bawah tanda tangan telah dihapus sesuai permintaan;
+      // variabel di bawah selalu false (footer tidak lagi ada di sel worksheet)
       if (textRow.includes("Formulir Dokumentasi FR.SM/TI/033.001")) foundFooterForm = true;
       if (textRow.includes("Edisi: 002-2020")) foundFooterEdisi = true;
     });
@@ -209,8 +215,9 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
     expect(foundCreatorName).toBe(true);
     expect(foundMRRole).toBe(true);
     expect(foundMRName).toBe(true);
-    expect(foundFooterForm).toBe(true);
-    expect(foundFooterEdisi).toBe(true);
+    // Footer sel dihapus sesuai permintaan — pastikan memang tidak ada
+    expect(foundFooterForm).toBe(false);
+    expect(foundFooterEdisi).toBe(false);
   });
 
   it("5. Pengaturan Cetak (Print Setup): Landscape, A4, Repeat Header Row 6:7", async () => {
@@ -224,10 +231,8 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
     expect(ws.pageSetup.fitToHeight).toBe(0);
     expect(ws.pageSetup.printTitlesRow).toBe("6:7");
 
-    // Dynamic page numbers dan header/footer cetak
-    expect(ws.headerFooter.oddFooter).toContain("&P");
-    expect(ws.headerFooter.oddFooter).toContain("&N");
-    expect(ws.headerFooter.oddFooter).toContain("FR.SM/TI/033.001");
+    // Header/footer cetak dihapus sesuai permintaan; oddFooter harus null atau undefined
+    expect(ws.headerFooter.oddFooter == null || ws.headerFooter.oddFooter === "").toBe(true);
   });
 
   it("6. Mampu menghasilkan file Excel biner (.xlsx) utuh yang dapat disimpan", async () => {

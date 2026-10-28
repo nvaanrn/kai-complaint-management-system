@@ -18,7 +18,7 @@ export default function KaiDocumentView({
   complaints,
   documentNumber = "FR.SM/TI/033.001/10-2020",
   documentDate = "12 Oktober 2020",
-  version = "002-2020",
+  version = `001-${new Date().getFullYear()}`,
   managementRep = "Ir. Bambang Triyono (MR)",
   creatorName = "Petugas SPKP KAI",
   pageInfo = "1 dari 1",
@@ -107,7 +107,7 @@ export default function KaiDocumentView({
           <div className="col-span-3 text-[10px] divide-y divide-black">
             <div className="grid grid-cols-12 divide-x divide-black py-1">
               <span className="col-span-5 px-2 font-medium">No. Dokumen</span>
-              <span className="col-span-7 px-2 font-mono font-bold truncate">: {documentNumber}</span>
+              <span className="col-span-7 px-2 font-mono font-bold break-all text-[9px]">: {documentNumber}</span>
             </div>
             <div className="grid grid-cols-12 divide-x divide-black py-1">
               <span className="col-span-5 px-2 font-medium">Tanggal</span>
@@ -132,56 +132,56 @@ export default function KaiDocumentView({
           <tr className="bg-white text-black font-bold text-center border-b border-black">
             <th
               rowSpan={2}
-              style={{ width: "3.5%" }}
+              style={{ width: "3%" }}
               className="border border-black px-1.5 py-1.5 text-center align-middle"
             >
               No
             </th>
             <th
               rowSpan={2}
-              style={{ width: "8.5%" }}
+              style={{ width: "7.5%" }}
               className="border border-black px-1.5 py-1.5 text-center align-middle"
             >
               Tanggal
             </th>
             <th
               rowSpan={2}
-              style={{ width: "12%" }}
+              style={{ width: "11.5%" }}
               className="border border-black px-2 py-1.5 text-center align-middle"
             >
               Pelanggan
             </th>
             <th
               rowSpan={2}
-              style={{ width: "9%" }}
+              style={{ width: "7.5%" }}
               className="border border-black px-1.5 py-1.5 text-center align-middle"
             >
               Sumber
             </th>
             <th
               rowSpan={2}
-              style={{ width: "20.5%" }}
+              style={{ width: "19%" }}
               className="border border-black px-2 py-1.5 text-center align-middle"
             >
               Deskripsi Keluhan
             </th>
             <th
               rowSpan={2}
-              style={{ width: "19.5%" }}
+              style={{ width: "18.5%" }}
               className="border border-black px-2 py-1.5 text-center align-middle"
             >
               Tindakan perbaikan dan pencegahan yang diambil
             </th>
             <th
               colSpan={3}
-              style={{ width: "17.5%" }}
+              style={{ width: "24.5%" }}
               className="border border-black px-1 py-1 text-center align-middle"
             >
               Verification
             </th>
             <th
               rowSpan={2}
-              style={{ width: "9.5%" }}
+              style={{ width: "8.5%" }}
               className="border border-black px-1.5 py-1.5 text-center align-middle"
             >
               Keterangan
@@ -191,19 +191,19 @@ export default function KaiDocumentView({
           {/* Header Baris 2 (Sub-kolom Verification) */}
           <tr className="bg-white text-black font-bold text-center border-b border-black">
             <th
-              style={{ width: "6%" }}
+              style={{ width: "5.5%" }}
               className="border border-black px-1 py-1 text-center align-middle"
             >
               Tgl
             </th>
             <th
-              style={{ width: "6%" }}
+              style={{ width: "6.5%" }}
               className="border border-black px-1 py-1 text-center align-middle"
             >
               PIC
             </th>
             <th
-              style={{ width: "5.5%" }}
+              style={{ width: "12.5%" }}
               className="border border-black px-1 py-1 text-center align-middle"
             >
               Hasil
@@ -357,11 +357,7 @@ export default function KaiDocumentView({
         </div>
       </div>
 
-      {/* 4. FOOTER RESMI KAI */}
-      <div className="kai-footer-block kai-keep-together mt-6 pt-2 border-t border-black flex items-center justify-between text-[9px] text-slate-600 font-mono">
-          <span>PT Kereta Api Indonesia (Persero)</span>
-        <span>Edisi: {version}</span>
-      </div>
+      {/* Footer dihapus sesuai permintaan */}
     </div>
   );
 }

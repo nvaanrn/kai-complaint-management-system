@@ -150,6 +150,7 @@ export default function DashboardClient({
     date: string;
     picId?: string;
     description: string;
+    category?: string;
   }) => {
     try {
       setCreateLoading(true);
@@ -161,6 +162,7 @@ export default function DashboardClient({
         date: data.date,
         picId: data.picId,
         description: data.description,
+        category: data.category,
       });
 
       if (!res.success) {
@@ -524,26 +526,18 @@ export default function DashboardClient({
                 ? (item) => setComplaintToDelete(item)
                 : undefined
             }
-            onExportExcel={() => {
-              // Data ekspor difilter sesuai hak akses role:
-              // Admin: semua data yang ditampilkan
-              // PIC: hanya keluhan yang menjadi tanggung jawabnya
-              // Verifikator: data yang ditampilkan (sudah difilter server-side)
-              const exportData =
-                currentUser.role === Role.PIC
-                  ? displayedComplaints.filter(isAssignedToCurrentUser)
-                  : displayedComplaints;
-              exportComplaintsToExcel(exportData, {
-                creatorName: currentUser.name || "Petugas SPKP KAI",
-                filenamePrefix:
-                  currentUser.role === Role.PIC
-                    ? `FR_SM_TI_033_001_Tugas_${(currentUser.name || "PIC").replace(/\s+/g, "_")}`
-                    : currentUser.role === Role.VERIFIKATOR
-                    ? "FR_SM_TI_033_001_Verifikasi_Keluhan_KAI"
-                    : "FR_SM_TI_033_001_Keluhan_Pelanggan_KAI",
-              });
-              showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
-            }}
+            onOpenDocModal={() => setIsDocModalOpen(true)}
+            onExportExcel={
+              currentUser.role === Role.ADMIN
+                ? () => {
+                    exportComplaintsToExcel(displayedComplaints, {
+                      creatorName: currentUser.name || "Administrator SPKP",
+                      filenamePrefix: "FR_SM_TI_033_001_Keluhan_Pelanggan_KAI",
+                    });
+                    showToast("Rekapitulasi keluhan berhasil diekspor ke Excel (.xlsx)!");
+                  }
+                : undefined
+            }
             isAssignedToCurrentUser={isAssignedToCurrentUser}
           />
         </main>
@@ -603,6 +597,7 @@ export default function DashboardClient({
           complaints={complaints}
           currentUser={currentUser}
           onClose={() => setIsDocModalOpen(false)}
+          onDocumentPublished={() => router.refresh()}
         />
       )}
 

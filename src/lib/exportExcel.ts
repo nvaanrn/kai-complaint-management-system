@@ -75,7 +75,7 @@ export async function exportComplaintsToExcel(
       month: "long",
       year: "numeric",
     });
-  const docVersion = opts.version || "002-2020";
+  const docVersion = opts.version || `001-${currentYear}`;
   const creatorName = opts.creatorName || "Administrator SPKP";
   const managementRep = opts.managementRep || "Ir. Bambang Triyono (MR)";
   const pageInfo = opts.pageInfo || "1 dari 1";
@@ -87,17 +87,9 @@ export async function exportComplaintsToExcel(
   workbook.created = new Date();
   workbook.modified = new Date();
 
-  const ws = workbook.addWorksheet("FR.SM.TI.033.001", {
-    views: [
-      {
-        state: "frozen",
-        xSplit: 0,
-        ySplit: 7, // Freeze tepat di bawah baris 7 (header tabel), data mulai baris 8
-        activeCell: "A8",
-        showGridLines: true,
-      },
-    ],
-  });
+  // Buat worksheet tanpa views dulu; views diterapkan SETELAH header selesai
+  // agar merged cells pada baris 1‑7 sudah terdaftar sebelum freeze‑pane dikunci.
+  const ws = workbook.addWorksheet("FR.SM.TI.033.001");
 
   // 1. Definisikan lebar kolom tabel baku sesuai rasio dan proporsi PDF referensi KAI
   ws.columns = [
@@ -109,7 +101,7 @@ export async function exportComplaintsToExcel(
     { key: "tindakan", width: 34 }, // F: Tindakan perbaikan dan pencegahan yang diambil (19.5%)
     { key: "verifTgl", width: 13 }, // G: Verification -> Tgl (6.0%)
     { key: "verifPic", width: 14 }, // H: Verification -> PIC (6.0%)
-    { key: "verifHasil", width: 13 }, // I: Verification -> Hasil (5.5%)
+    { key: "verifHasil", width: 22 }, // I: Verification -> Hasil (Dilebarkan agar muat rapi)
     { key: "keterangan", width: 18 }, // J: Keterangan (9.5%)
   ];
 
@@ -130,11 +122,13 @@ export async function exportComplaintsToExcel(
       extension: "png",
     });
 
-    // Cast to any to satisfy exceljs Anchor type requirements
+    // Logo mengisi area merged cell A1:B2 secara presisi menggunakan anchor tl/br.
+    // ExcelJS akan merentangkan gambar agar pas dengan batas sel tanpa perlu menentukan piksel manual.
     ws.addImage(logoId, {
       tl: { col: 0, row: 0 } as any,
       br: { col: 2, row: 2 } as any,
-    });
+      editAs: "oneCell",
+    } as any);
   } catch (err) {
     console.warn("Gagal menyematkan gambar logo KAI ke Excel, menggunakan teks cadangan:", err);
     const cellA1 = ws.getCell("A1");
@@ -288,6 +282,9 @@ export async function exportComplaintsToExcel(
   applyRangeBorders(ws, 6, 6, 7, 6, "thin");
   applyRangeBorders(ws, 6, 7, 6, 9, "thin");
   applyRangeBorders(ws, 6, 10, 7, 10, "thin");
+
+  // Tampilan normal (tidak ada freeze pane) — seperti Excel biasa
+  ws.views = [{ showGridLines: true }];
 
   // CATATAN: Sesuai referensi PDF resmi KAI, teks panduan dalam tanda kurung dihilangkan total.
   // Data keluhan langsung dimulai pada baris ke-8.
@@ -546,29 +543,8 @@ export async function exportComplaintsToExcel(
   cellSigR4.font = { name: "Arial", size: 7.5, color: { argb: "FF475569" } };
   cellSigR4.alignment = { horizontal: "center", vertical: "middle" };
 
-  // 7. FOOTER DOKUMEN RESMI KAI — Sejajar dan proporsional persis PDF
-  const footerRow = sigRow4 + 2;
-
-      // Row for Formulir Dokumentasi reference (appears before main footer)
-      const docRefRow = footerRow;
-      ws.mergeCells(`A${docRefRow}:J${docRefRow}`);
-      const cellDocRef = ws.getCell(`A${docRefRow}`);
-      cellDocRef.value = `Formulir Dokumentasi FR.SM/TI/033.001`;
-      cellDocRef.font = { name: "Arial", size: 7.5, color: { argb: "FF64748B" } };
-      cellDocRef.alignment = { horizontal: "center", vertical: "middle" };
-      // Move main footer one row down
-      const mainFooterRow = docRefRow + 1;
-      ws.getRow(mainFooterRow).height = 16;
-      ws.mergeCells(`A${mainFooterRow}:F${mainFooterRow}`);
-      const cellFootL = ws.getCell(`A${mainFooterRow}`);
-      cellFootL.value = "PT Kereta Api Indonesia (Persero)";
-      cellFootL.font = { name: "Arial", size: 7.5, color: { argb: "FF64748B" } };
-      cellFootL.alignment = { horizontal: "left", vertical: "middle" };
-      ws.mergeCells(`G${mainFooterRow}:J${mainFooterRow}`);
-      const cellFootR = ws.getCell(`G${mainFooterRow}`);
-      cellFootR.value = `Edisi: ${docVersion}`;
-      cellFootR.font = { name: "Arial", size: 7.5, color: { argb: "FF64748B" } };
-      cellFootR.alignment = { horizontal: "right", vertical: "middle" };
+  // 7. FOOTER DOKUMEN — dihapus sesuai permintaan (tidak ada teks keterangan di bawah tanda tangan)
+  const footerRow = sigRow4 + 1; // baris tepat setelah tanda tangan (untuk printArea)
 
 
 
@@ -591,10 +567,7 @@ export async function exportComplaintsToExcel(
     printArea: `A1:J${footerRow}`,
   };
 
-  // Header & Footer untuk pencetakan
-ws.headerFooter = {
-  oddFooter: `&L&"Arial,Regular"&7.5PT Kereta Api Indonesia (Persero) - Formulir Dokumentasi FR.SM/TI/033.001/${currentMonth}-${currentYear}&R&"Arial,Regular"&7.5Halaman &P dari &N`,
-};
+  // Header & Footer pencetakan dihapus sesuai permintaan
 
   // Generate buffer untuk download atau ekspor
   const buffer = await workbook.xlsx.writeBuffer();
