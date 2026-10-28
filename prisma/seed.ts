@@ -51,43 +51,13 @@ async function main() {
   console.log(`   - Verifikator : ${verifikator.email}`);
   console.log('   (Password untuk semua akun: password123)\n');
 
-  // Sinkronisasi ke Supabase Auth (Standar Supabase) jika service role key tersedia
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.NEXT_SERVICE_ROLE_KEY;
-  if (supabaseUrl && serviceRoleKey) {
-    try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(supabaseUrl, serviceRoleKey);
-      const accounts = [
-        { email: 'admin@spkp.kai.id', name: 'Administrator SPKP', role: Role.ADMIN },
-        { email: 'pic@spkp.kai.id', name: 'Budi Santoso (PIC Operasional)', role: Role.PIC },
-        { email: 'verifikator@spkp.kai.id', name: 'Siti Rahma (Tim Verifikasi)', role: Role.VERIFIKATOR },
-      ];
-
-      for (const acc of accounts) {
-        await supabase.auth.admin.createUser({
-          email: acc.email,
-          password: 'password123',
-          email_confirm: true,
-          user_metadata: { name: acc.name, role: acc.role },
-          app_metadata: { role: acc.role },
-        }).catch(() => {
-          // Akun sudah ada di Supabase Auth
-        });
-      }
-      console.log('✅ Sinkronisasi akun ke Supabase Auth selesai.\n');
-    } catch (err) {
-      console.warn('⚠️ Gagal menyinkronkan ke Supabase Auth (opsional):', err);
-    }
-  }
-
-  // 4. Buat Sample Data Keluhan (Complaints)
+  // 4. Buat Sample Data Keluhan (Complaints) dengan Sumber Resmi KAI
   const complaints = [
     {
       complaintNumber: 'CMP-2026-001',
       date: new Date('2026-09-23T08:30:00Z'),
       customerName: 'PT Surya Gemilang',
-      source: 'Telepon',
+      source: 'Contact Center 121',
       description: 'Gangguan sinkronisasi data tagihan periode September 2026',
       status: ComplaintStatus.DALAM_PENANGANAN,
       picId: pic.id,
@@ -98,7 +68,7 @@ async function main() {
       complaintNumber: 'CMP-2026-002',
       date: new Date('2026-09-23T10:15:00Z'),
       customerName: 'Bapak Hendra (Divisi Logistik)',
-      source: 'Email',
+      source: 'Email Resmi KAI',
       description: 'Laporan kelambatan pengiriman berkas surat jalan cabang',
       status: ComplaintStatus.BELUM_DITANGANI,
       picId: null,
@@ -109,7 +79,7 @@ async function main() {
       complaintNumber: 'CMP-2026-003',
       date: new Date('2026-09-22T14:00:00Z'),
       customerName: 'Ibu Ratna (Unit Layanan Terpadu)',
-      source: 'Laporan Langsung',
+      source: 'Petugas Stasiun / Loket',
       description: 'Permintaan rekapitulasi berkas tindak lanjut keluhan triwulan III',
       status: ComplaintStatus.MENUNGGU_VERIFIKASI,
       picId: pic.id,
@@ -121,12 +91,22 @@ async function main() {
   for (const item of complaints) {
     await prisma.complaint.upsert({
       where: { complaintNumber: item.complaintNumber },
-      update: {},
+      update: {
+        source: item.source,
+      },
       create: item,
     });
   }
 
-  console.log(`✅ ${complaints.length} Data keluhan awal berhasil di-seed.`);
+  // 5. Inisialisasi ComplaintCounter agar sinkron dengan urutan data keluhan
+  await prisma.complaintCounter.upsert({
+    where: { year: 2026 },
+    update: { lastSequence: complaints.length },
+    create: { year: 2026, lastSequence: complaints.length },
+  });
+
+  console.log(`✅ ${complaints.length} Data keluhan awal berhasil di-seed dengan sumber resmi.`);
+  console.log(`✅ ComplaintCounter tahun 2026 berhasil disinkronkan ke sequence ${complaints.length}.`);
   console.log('🎉 Seeding selesai dengan sukses!');
 }
 

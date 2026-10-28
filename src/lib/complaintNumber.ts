@@ -31,3 +31,24 @@ export function parseNextSequence(lastComplaintNumber?: string | null, targetYea
 
   return num + 1;
 }
+
+export function extractComplaintSequence(complaintNumber?: string | null, targetYear?: number): number | null {
+  const currentYear = targetYear ?? new Date().getFullYear();
+  const prefix = `CMP-${currentYear}-`;
+
+  if (!complaintNumber || typeof complaintNumber !== "string" || !complaintNumber.startsWith(prefix)) {
+    return null;
+  }
+
+  const parts = complaintNumber.split("-");
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const num = parseInt(parts[2], 10);
+  if (isNaN(num) || num < 0) {
+    return null;
+  }
+
+  return num;
+}

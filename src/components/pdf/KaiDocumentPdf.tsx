@@ -1,244 +1,365 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Image as PdfImage } from "@react-pdf/renderer";
 import { ComplaintData } from "@/components/DashboardClient";
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 30,
-    paddingBottom: 35,
-    paddingHorizontal: 35,
-    fontSize: 9,
+    paddingTop: 24,
+    paddingBottom: 24,
+    paddingHorizontal: 28,
+    fontSize: 8,
     fontFamily: "Helvetica",
-    color: "#1e293b",
+    color: "#000000",
   },
-  headerContainer: {
-    borderBottomWidth: 1.5,
-    borderBottomColor: "#1e3a8a",
-    paddingBottom: 10,
-    marginBottom: 12,
+  // KOP / Header Box 3 Bagian
+  headerBox: {
+    borderWidth: 1,
+    borderColor: "#000000",
     flexDirection: "row",
-    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  headerLeft: {
+    width: "16%",
+    borderRightWidth: 1,
+    borderRightColor: "#000000",
+    flexDirection: "column",
+  },
+  logoContainer: {
+    flex: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 4,
+  },
+  logoImage: {
+    width: 75,
+    height: 25,
+  },
+  terbatasContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 4,
+  },
+  logoPlaceholder: {
+    fontSize: 16,
+    fontFamily: "Helvetica-Bold",
+    color: "#1e3a8a",
+    letterSpacing: 1,
+    paddingTop: 2,
+  },
+  logoSub: {
+    fontSize: 5.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#f97316",
+    marginTop: -2,
+    letterSpacing: 0.5,
+  },
+  terbatasBox: {
+    borderWidth: 1.5,
+    borderColor: "#eab308",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    width: "90%",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  terbatasText: {
+    fontSize: 7.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#ca8a04",
+    letterSpacing: 1,
+  },
+  headerCenter: {
+    width: "56%",
+    borderRightWidth: 1,
+    borderRightColor: "#000000",
+    flexDirection: "column",
+  },
+  headerCenterTop: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+    paddingVertical: 4,
     alignItems: "center",
   },
-  brandTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#1e3a8a",
-  },
-  brandSubtitle: {
-    fontSize: 8,
-    color: "#64748b",
-    marginTop: 2,
-  },
-  docCodeBadge: {
-    backgroundColor: "#eff6ff",
-    borderWidth: 1,
-    borderColor: "#bfdbfe",
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    fontSize: 9,
-    fontWeight: "bold",
-    color: "#1e3a8a",
-    textAlign: "right",
-  },
-  docVersionText: {
-    fontSize: 7,
-    color: "#64748b",
-    marginTop: 2,
-    textAlign: "right",
-  },
-  titleBlock: {
+  companyName: {
+    fontSize: 9.5,
+    fontFamily: "Helvetica-Bold",
     textAlign: "center",
-    marginBottom: 12,
   },
-  mainTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    textTransform: "uppercase",
-    color: "#0f172a",
+  companyDivision: {
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    textAlign: "center",
+    marginTop: 1,
   },
-  subTitle: {
-    fontSize: 8,
-    color: "#475569",
-    marginTop: 2,
+  headerCenterBottom: {
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    justifyContent: "center",
+    alignItems: "center",
+    flex: 1,
   },
-  metaTable: {
+  documentTitle: {
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    textAlign: "center",
+  },
+  headerRight: {
+    width: "28%",
+    flexDirection: "column",
+  },
+  metaRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
-    backgroundColor: "#f8fafc",
-    padding: 6,
-    borderRadius: 3,
-    borderWidth: 0.5,
-    borderColor: "#cbd5e1",
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
   },
-  metaItem: {
-    fontSize: 8,
+  metaRowLast: {
+    flexDirection: "row",
   },
   metaLabel: {
-    color: "#64748b",
-    fontWeight: "normal",
+    width: "35%",
+    fontSize: 7,
+    fontFamily: "Helvetica",
+    borderRightWidth: 1,
+    borderRightColor: "#000000",
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    justifyContent: "center",
   },
   metaValue: {
-    fontWeight: "bold",
-    color: "#0f172a",
+    width: "65%",
+    fontSize: 6.5,
+    fontFamily: "Helvetica-Bold",
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    justifyContent: "center",
   },
+
+  // Tabel Rekapitulasi
   table: {
     width: "100%",
-    borderWidth: 0.5,
-    borderColor: "#94a3b8",
-    marginBottom: 16,
-  },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: "#f1f5f9",
-    borderBottomWidth: 1,
-    borderBottomColor: "#94a3b8",
-    fontWeight: "bold",
-    fontSize: 7.5,
+    borderWidth: 1,
+    borderColor: "#000000",
+    marginBottom: 10,
   },
   tableRow: {
     flexDirection: "row",
     borderBottomWidth: 0.5,
-    borderBottomColor: "#cbd5e1",
+    borderBottomColor: "#000000",
     minHeight: 24,
   },
-  th: {
-    padding: 4,
-    fontWeight: "bold",
-    color: "#1e293b",
-    borderRightWidth: 0.5,
-    borderRightColor: "#cbd5e1",
+  tableHeaderGroup: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#000000",
+    backgroundColor: "#ffffff",
+    fontFamily: "Helvetica-Bold",
+    fontSize: 7,
     textAlign: "center",
   },
-  td: {
-    padding: 4,
-    fontSize: 7.5,
+
+  th: {
+    padding: 2.5,
     borderRightWidth: 0.5,
-    borderRightColor: "#cbd5e1",
+    borderRightColor: "#000000",
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+    flexGrow: 0,
+  },
+  td: {
+    padding: 3,
+    fontSize: 6.5,
+    borderRightWidth: 0.5,
+    borderRightColor: "#000000",
+    flexShrink: 0,
+    flexGrow: 0,
   },
   lastCol: {
     borderRightWidth: 0,
   },
+
+  // Signature Block
   signatureSection: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 15,
-    paddingTop: 10,
+    marginTop: 10,
+    paddingTop: 4,
   },
   signatureBox: {
     width: "40%",
     textAlign: "center",
   },
   signatureRole: {
-    fontSize: 8,
-    color: "#475569",
-    marginBottom: 40,
+    fontSize: 7.5,
+    color: "#334155",
+    marginBottom: 4,
+  },
+  signatureSubRole: {
+    fontSize: 7.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#1e293b",
+    marginBottom: 35,
   },
   signatureName: {
-    fontSize: 9,
-    fontWeight: "bold",
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
     textDecoration: "underline",
-    color: "#0f172a",
+    color: "#000000",
   },
   signatureDate: {
-    fontSize: 7,
+    fontSize: 6.5,
     color: "#64748b",
     marginTop: 2,
   },
+
+  // Footer
   footer: {
     position: "absolute",
-    bottom: 15,
-    left: 35,
-    right: 35,
+    bottom: 12,
+    left: 28,
+    right: 28,
     borderTopWidth: 0.5,
-    borderTopColor: "#cbd5e1",
-    paddingTop: 4,
+    borderTopColor: "#94a3b8",
+    paddingTop: 3,
     flexDirection: "row",
     justifyContent: "space-between",
-    fontSize: 7,
-    color: "#94a3b8",
+    fontSize: 6.5,
+    color: "#64748b",
   },
 });
 
 interface KaiDocumentPdfProps {
   complaints: ComplaintData[];
-  documentNumber: string;
-  managementRep: string;
-  creatorName: string;
+  documentNumber?: string;
+  documentDate?: string;
+  version?: string;
+  managementRep?: string;
+  creatorName?: string;
+  logoUrl?: string;
 }
 
 export function KaiDocumentPdf({
   complaints,
-  documentNumber,
-  managementRep,
-  creatorName,
+  documentNumber = "FR.SM/TI/033.001/10-2020",
+  documentDate = "12 Oktober 2020",
+  version = `001-${new Date().getFullYear()}`,
+  managementRep = "Ir. Bambang Triyono (MR)",
+  creatorName = "Petugas SPKP KAI",
+  logoUrl,
 }: KaiDocumentPdfProps) {
-  const currentDate = new Date().toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  // Lebar kolom persis proporsional standar KAI (disesuaikan agar Hasil Verifikasi tidak meluber)
+  const colWidths = {
+    no: "3%",
+    tanggal: "7.5%",
+    pelanggan: "11.5%",
+    sumber: "7.5%",
+    deskripsi: "19%",
+    tindakan: "18.5%",
+    verifGroup: "24.5%",
+    verifTgl: "5.5%",
+    verifPic: "6.5%",
+    verifHasil: "12.5%",
+    keterangan: "8.5%",
+  };
 
   return (
-    <Document title={`Laporan-SPKP-${documentNumber}`}>
+    <Document title={`Dokumen-KAI-${documentNumber.replace(/[\/\\:]/g, "-")}`}>
       <Page size="A4" orientation="landscape" style={styles.page}>
-        {/* Header */}
-        <View style={styles.headerContainer}>
-          <View>
-            <Text style={styles.brandTitle}>PT KERETA API INDONESIA (PERSERO)</Text>
-            <Text style={styles.brandSubtitle}>
-              Sistem Penanganan Keluhan Pelanggan (SPKP) &bull; Pengendalian Mutu Layanan
-            </Text>
+        {/* 1. KOP / HEADER BAKU KAI 3-BAGIAN */}
+        <View style={styles.headerBox}>
+          {/* Kolom Kiri: Logo KAI & Badge TERBATAS */}
+          <View style={styles.headerLeft}>
+            <View style={styles.logoContainer}>
+              {logoUrl ? (
+                <PdfImage src={logoUrl} style={styles.logoImage} />
+              ) : (
+                <>
+                  <Text style={styles.logoPlaceholder}>KAI</Text>
+                  <Text style={styles.logoSub}>Kereta Api Indonesia</Text>
+                </>
+              )}
+            </View>
+            <View style={styles.terbatasContainer}>
+              <View style={styles.terbatasBox}>
+                <Text style={styles.terbatasText}>TERBATAS</Text>
+              </View>
+            </View>
           </View>
-          <View>
-            <Text style={styles.docCodeBadge}>FR.SM/TI/033.001</Text>
-            <Text style={styles.docVersionText}>Edisi: 002-2020</Text>
+
+          {/* Kolom Tengah: Judul Resmi */}
+          <View style={styles.headerCenter}>
+            <View style={styles.headerCenterTop}>
+              <Text style={styles.companyName}>PT KERETA API INDONESIA(PERSERO)</Text>
+              <Text style={styles.companyDivision}>SISTEM INFORMASI</Text>
+            </View>
+            <View style={styles.headerCenterBottom}>
+              <Text style={styles.documentTitle}>
+                DOKUMENTASI PENGELOLAAN DAN PENANGANAN KELUHAN PELANGGAN
+              </Text>
+            </View>
+          </View>
+
+          {/* Kolom Kanan: Kotak Metadata Dokumen */}
+          <View style={styles.headerRight}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>No. Dokumen</Text>
+              <Text style={styles.metaValue}>: {documentNumber}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Tanggal</Text>
+              <Text style={styles.metaValue}>: {documentDate}</Text>
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Versi</Text>
+              <Text style={styles.metaValue}>: {version}</Text>
+            </View>
+            <View style={styles.metaRowLast}>
+              <Text style={styles.metaLabel}>Halaman</Text>
+              <Text
+                style={styles.metaValue}
+                render={({ pageNumber, totalPages }) => `: ${pageNumber} dari ${totalPages}`}
+              />
+            </View>
           </View>
         </View>
 
-        {/* Title */}
-        <View style={styles.titleBlock}>
-          <Text style={styles.mainTitle}>
-            Daftar Rekapitulasi Tindak Lanjut Keluhan Pelanggan
-          </Text>
-          <Text style={styles.subTitle}>
-            Dokumen resmi penanganan dan verifikasi mutu keluhan pelanggan kereta api
-          </Text>
-        </View>
-
-        {/* Metadata */}
-        <View style={styles.metaTable}>
-          <Text style={styles.metaItem}>
-            <Text style={styles.metaLabel}>Nomor Dokumen: </Text>
-            <Text style={styles.metaValue}>{documentNumber}</Text>
-          </Text>
-          <Text style={styles.metaItem}>
-            <Text style={styles.metaLabel}>Tanggal Cetak: </Text>
-            <Text style={styles.metaValue}>{currentDate}</Text>
-          </Text>
-          <Text style={styles.metaItem}>
-            <Text style={styles.metaLabel}>Management Representative: </Text>
-            <Text style={styles.metaValue}>{managementRep}</Text>
-          </Text>
-        </View>
-
-        {/* Table */}
+        {/* 2. TABEL REKAPITULASI RESMI */}
         <View style={styles.table}>
-          {/* Header Row */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.th, { width: "4%" }]}>No</Text>
-            <Text style={[styles.th, { width: "12%" }]}>No. Keluhan</Text>
-            <Text style={[styles.th, { width: "10%" }]}>Tanggal</Text>
-            <Text style={[styles.th, { width: "15%" }]}>Nama Pelapor</Text>
-            <Text style={[styles.th, { width: "10%" }]}>Sumber</Text>
-            <Text style={[styles.th, { width: "19%" }]}>Uraian Keluhan</Text>
-            <Text style={[styles.th, { width: "18%" }]}>Tindakan Penanganan</Text>
-            <Text style={[styles.th, { width: "12%" }]}>Status Mutu</Text>
+          {/* Header Baris 1 & 2 (Merged) - fixed agar berulang di setiap halaman */}
+          <View style={styles.tableHeaderGroup} fixed>
+            <View style={[styles.th, { width: colWidths.no }]}><Text>No</Text></View>
+            <View style={[styles.th, { width: colWidths.tanggal }]}><Text>Tanggal</Text></View>
+            <View style={[styles.th, { width: colWidths.pelanggan }]}><Text>Pelanggan</Text></View>
+            <View style={[styles.th, { width: colWidths.sumber }]}><Text>Sumber</Text></View>
+            <View style={[styles.th, { width: colWidths.deskripsi }]}><Text>Deskripsi Keluhan</Text></View>
+            <View style={[styles.th, { width: colWidths.tindakan }]}><Text>Tindakan perbaikan dan pencegahan yang diambil</Text></View>
+            
+            <View style={{ width: colWidths.verifGroup, borderRightWidth: 0.5, borderRightColor: "#000000", flexDirection: "column", flexShrink: 0, flexGrow: 0 }}>
+              <View style={{ flex: 1, borderBottomWidth: 0.5, borderBottomColor: "#000000", padding: 2.5, alignItems: "center", justifyContent: "center" }}>
+                <Text>Verification</Text>
+              </View>
+              <View style={{ flexDirection: "row", flex: 1 }}>
+                <View style={{ width: "22.45%", borderRightWidth: 0.5, borderRightColor: "#000000", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
+                  <Text>Tgl</Text>
+                </View>
+                <View style={{ width: "26.53%", borderRightWidth: 0.5, borderRightColor: "#000000", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
+                  <Text>PIC</Text>
+                </View>
+                <View style={{ width: "51.02%", padding: 2.5, alignItems: "center", justifyContent: "center", flexShrink: 0, flexGrow: 0 }}>
+                  <Text>Hasil</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={[styles.th, { width: colWidths.keterangan, borderRightWidth: 0 }]}><Text>Keterangan</Text></View>
           </View>
 
-          {/* Body Rows */}
+
+
+          {/* Data Rows */}
           {complaints.map((item, idx) => {
             const formattedDate = new Date(item.date).toLocaleDateString("id-ID", {
               day: "2-digit",
@@ -246,54 +367,143 @@ export function KaiDocumentPdf({
               year: "numeric",
             });
 
+            const verificationDate =
+              item.verifications && item.verifications.length > 0
+                ? new Date(item.verifications[0].verifiedAt).toLocaleDateString("id-ID", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : item.submittedAt
+                ? new Date(item.submittedAt).toLocaleDateString("id-ID", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "-";
+
+            const picName = item.pic?.name || (item.picId ? "PIC Ditugaskan" : "-");
+            const verificationResult =
+              item.status === "TERVERIFIKASI"
+                ? (item.verifications && item.verifications.length > 0 && item.verifications[0].feedback ? item.verifications[0].feedback : "Disetujui")
+                : item.status;
+
+            const actions =
+              (item.correctiveAction ? `Perbaikan: ${item.correctiveAction}\n` : "") +
+              (item.preventiveAction ? `Pencegahan: ${item.preventiveAction}` : "") ||
+              "Belum ada tindakan";
+
             return (
               <View key={item.id} style={styles.tableRow} wrap={false}>
-                <Text style={[styles.td, { width: "4%", textAlign: "center" }]}>
-                  {idx + 1}
-                </Text>
-                <Text style={[styles.td, { width: "12%", fontWeight: "bold" }]}>
-                  {item.complaintNumber}
-                </Text>
-                <Text style={[styles.td, { width: "10%" }]}>{formattedDate}</Text>
-                <Text style={[styles.td, { width: "15%" }]}>
-                  {item.customerName}
-                  {item.daopOrStation ? `\n(${item.daopOrStation})` : ""}
-                </Text>
-                <Text style={[styles.td, { width: "10%" }]}>{item.source}</Text>
-                <Text style={[styles.td, { width: "19%" }]}>{item.description}</Text>
-                <Text style={[styles.td, { width: "18%" }]}>
-                  {item.correctiveAction
-                    ? `Perbaikan: ${item.correctiveAction}\nPencegahan: ${item.preventiveAction || "-"}`
-                    : "Belum ada tindakan"}
-                </Text>
-                <Text style={[styles.td, { width: "12%", textAlign: "center" }]}>
-                  {item.status === "TERVERIFIKASI" ? "Terverifikasi" : item.status}
-                </Text>
+                <View style={[styles.td, { width: colWidths.no, alignItems: "center" }]}>
+                  <Text>{idx + 1}</Text>
+                </View>
+                <View style={[styles.td, { width: colWidths.tanggal, alignItems: "center" }]}>
+                  <Text>{formattedDate}</Text>
+                </View>
+                <View style={[styles.td, { width: colWidths.pelanggan }]}>
+                  <Text style={{ fontFamily: "Helvetica-Bold" }}>{item.customerName}</Text>
+                  {item.daopOrStation ? <Text style={{ fontSize: 5.5, marginTop: 1, color: "#64748b" }}>{item.daopOrStation.replace(/\n/g, " ")}</Text> : null}
+                  {item.customerContact ? <Text style={{ fontSize: 5.5, marginTop: 1, color: "#64748b" }}>{item.customerContact.replace(/\n/g, " ")}</Text> : null}
+                </View>
+                <View style={[styles.td, { width: colWidths.sumber }]}>
+                  <Text>{item.source}</Text>
+                </View>
+                <View style={[styles.td, { width: colWidths.deskripsi }]}>
+                  <Text style={{ lineHeight: 1.3 }}>{item.description ? item.description.replace(/\n/g, " ") : ""}</Text>
+                </View>
+                <View style={[styles.td, { width: colWidths.tindakan }]}>
+                  {item.correctiveAction ? (
+                    <View style={{ marginBottom: 3 }}>
+                      <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 5.5, color: "#334155", textTransform: "uppercase" }}>Perbaikan:</Text>
+                      <Text style={{ lineHeight: 1.3 }}>{item.correctiveAction.replace(/\n/g, " ")}</Text>
+                    </View>
+                  ) : null}
+                  {item.preventiveAction ? (
+                    <View style={item.correctiveAction ? { paddingTop: 2, borderTopWidth: 0.5, borderTopColor: "#cbd5e1" } : {}}>
+                      <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 5.5, color: "#334155", textTransform: "uppercase" }}>Pencegahan:</Text>
+                      <Text style={{ lineHeight: 1.3 }}>{item.preventiveAction.replace(/\n/g, " ")}</Text>
+                    </View>
+                  ) : null}
+                  {!item.correctiveAction && !item.preventiveAction && (
+                    <Text style={{ color: "#94a3b8", fontStyle: "italic" }}>Belum ada tindakan</Text>
+                  )}
+                </View>
+                <View style={[styles.td, { width: colWidths.verifTgl, alignItems: "center" }]}>
+                  <Text>{verificationDate}</Text>
+                </View>
+                <View style={[styles.td, { width: colWidths.verifPic, alignItems: "center" }]}>
+                  <Text>{picName}</Text>
+                </View>
+                <View style={[styles.td, { width: colWidths.verifHasil, alignItems: "center", justifyContent: "center", overflow: "hidden", padding: 2 }]}>
+                  <View style={{
+                    backgroundColor: item.status === "TERVERIFIKASI" ? "#d1fae5" : "#f1f5f9",
+                    borderWidth: item.status === "TERVERIFIKASI" ? 0.5 : 0,
+                    borderColor: "#6ee7b7",
+                    paddingVertical: 2,
+                    paddingHorizontal: 2,
+                    borderRadius: 2,
+                    width: "100%",
+                    maxWidth: "100%",
+                  }}>
+                    <Text style={{
+                      fontSize: 4.8,
+                      fontFamily: "Helvetica-Bold",
+                      color: item.status === "TERVERIFIKASI" ? "#064e3b" : "#1e293b",
+                      textTransform: "uppercase",
+                      textAlign: "center",
+                      lineHeight: 1.25,
+                    }}>
+                      {verificationResult}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.td, { width: colWidths.keterangan, borderRightWidth: 0 }]}>
+                  <Text style={{ fontFamily: "Helvetica-Bold" }}>{item.complaintNumber}</Text>
+                  {item.notes ? <Text style={{ fontSize: 5.5, color: "#475569", marginTop: 2 }}>{item.notes.replace(/\n/g, " ")}</Text> : null}
+                </View>
               </View>
             );
           })}
+
+          {/* Baris kosong jika data sedikit */}
+          {complaints.length < 4 &&
+            Array.from({ length: 4 - complaints.length }).map((_, i) => (
+              <View key={`empty-${i}`} style={styles.tableRow} wrap={false}>
+                <View style={[styles.td, { width: colWidths.no, alignItems: "center" }]}>
+                  <Text style={{ color: "#cbd5e1" }}>{complaints.length + i + 1}</Text>
+                </View>
+                <View style={[styles.td, { width: colWidths.tanggal }]}></View>
+                <View style={[styles.td, { width: colWidths.pelanggan }]}></View>
+                <View style={[styles.td, { width: colWidths.sumber }]}></View>
+                <View style={[styles.td, { width: colWidths.deskripsi }]}></View>
+                <View style={[styles.td, { width: colWidths.tindakan }]}></View>
+                <View style={[styles.td, { width: colWidths.verifTgl }]}></View>
+                <View style={[styles.td, { width: colWidths.verifPic }]}></View>
+                <View style={[styles.td, { width: colWidths.verifHasil }]}></View>
+                <View style={[styles.td, { width: colWidths.keterangan, borderRightWidth: 0 }]}></View>
+              </View>
+            ))}
         </View>
 
-        {/* Signature Blocks */}
+        {/* 3. TANDA TANGAN RESMI KAI */}
         <View style={styles.signatureSection} wrap={false}>
           <View style={styles.signatureBox}>
             <Text style={styles.signatureRole}>Dibuat Oleh (Pelaksana SPKP):</Text>
+            <Text style={styles.signatureSubRole}>Petugas Pengelola SPKP</Text>
             <Text style={styles.signatureName}>{creatorName || "Petugas SPKP KAI"}</Text>
-            <Text style={styles.signatureDate}>Tanggal: {currentDate}</Text>
+            <Text style={styles.signatureDate}>Tanggal: {documentDate}</Text>
           </View>
 
           <View style={styles.signatureBox}>
-            <Text style={styles.signatureRole}>Mengetahui (Management Representative):</Text>
+            <Text style={styles.signatureRole}>Mengetahui:</Text>
+            <Text style={styles.signatureSubRole}>Management Representative (MR)</Text>
             <Text style={styles.signatureName}>{managementRep}</Text>
-            <Text style={styles.signatureDate}>Tanggal: {currentDate}</Text>
+            <Text style={styles.signatureDate}>Tanggal: {documentDate}</Text>
           </View>
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer} fixed>
-          <Text>Formulir Pengendalian Mutu FR.SM/TI/033.001 &bull; PT Kereta Api Indonesia (Persero)</Text>
-          <Text render={({ pageNumber, totalPages }) => `Halaman ${pageNumber} dari ${totalPages}`} />
-        </View>
+        {/* Footer dihapus sesuai permintaan */}
       </Page>
     </Document>
   );

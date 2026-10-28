@@ -1,23 +1,17 @@
 "use client";
 
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { useState } from "react";
 
 export default function LogoutButton() {
-  const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-      const supabase = createBrowserSupabaseClient();
-      await supabase.auth.signOut();
-      router.push("/login");
-      router.refresh();
+      await signOut({ callbackUrl: "/login" });
     } catch (error) {
       console.error("Gagal logout:", error);
-    } finally {
       setIsLoggingOut(false);
     }
   };

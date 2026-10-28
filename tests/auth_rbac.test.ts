@@ -68,8 +68,9 @@ describe("Unit Test: Role-Based Access Control (RBAC Permissions)", () => {
       expect(Permissions.canExecuteComplaint(verifikatorUser, complaintAssignedToPic1)).toBe(false);
     });
 
-    it("Admin memiliki hak override untuk mengeksekusi bila darurat", () => {
-      expect(Permissions.canExecuteComplaint(adminUser, complaintAssignedToPic1)).toBe(true);
+    it("Admin TIDAK memiliki hak override eksekusi penanganan (separation of duties — Fase 4)", () => {
+      // Admin tidak boleh menyimpan progres atas nama PIC, meskipun keluhan memiliki PIC lain
+      expect(Permissions.canExecuteComplaint(adminUser, complaintAssignedToPic1)).toBe(false);
     });
   });
 
@@ -82,8 +83,8 @@ describe("Unit Test: Role-Based Access Control (RBAC Permissions)", () => {
       expect(Permissions.canVerifyComplaint(picUser1)).toBe(false);
     });
 
-    it("Admin berwenang memverifikasi sebagai supervisor", () => {
-      expect(Permissions.canVerifyComplaint(adminUser)).toBe(true);
+    it("Admin dilarang memverifikasi (four-eyes principle — SOP KAI)", () => {
+      expect(Permissions.canVerifyComplaint(adminUser)).toBe(false);
     });
 
     it("User anonim ditolak verifikasi", () => {
@@ -102,6 +103,40 @@ describe("Unit Test: Role-Based Access Control (RBAC Permissions)", () => {
       expect(Permissions.canDeleteComplaint(adminUser)).toBe(true);
       expect(Permissions.canDeleteComplaint(picUser1)).toBe(false);
       expect(Permissions.canDeleteComplaint(verifikatorUser)).toBe(false);
+    });
+  });
+
+  describe("Kewenangan Penerbitan & Ekspor Dokumen Resmi (canGenerateDocument & canExportDocument)", () => {
+    it("Hanya Admin yang berwenang menerbitkan dokumen rekapitulasi resmi", () => {
+      expect(Permissions.canGenerateDocument(adminUser)).toBe(true);
+      expect(Permissions.canGenerateDocument(picUser1)).toBe(false);
+      expect(Permissions.canGenerateDocument(verifikatorUser)).toBe(false);
+      expect(Permissions.canGenerateDocument(null)).toBe(false);
+    });
+
+    it("Hanya Admin yang berwenang mengekspor berkas resmi FR.SM/TI/033.001", () => {
+      expect(Permissions.canExportDocument(adminUser)).toBe(true);
+      expect(Permissions.canExportDocument(picUser1)).toBe(false);
+      expect(Permissions.canExportDocument(verifikatorUser)).toBe(false);
+      expect(Permissions.canExportDocument(null)).toBe(false);
+    });
+  });
+
+  describe("Validasi Penugasan PIC: Admin DILARANG Ditugaskan Sebagai PIC", () => {
+    it("Hanya pengguna dengan Role.PIC yang sah menjadi petugas PIC", () => {
+      const isEligiblePic = (u: { role: Role }) => u.role === Role.PIC;
+      expect(isEligiblePic(picUser1)).toBe(true);
+      expect(isEligiblePic(picUser2)).toBe(true);
+    });
+
+    it("Admin DITOLAK saat dicalonkan sebagai petugas PIC", () => {
+      const isEligiblePic = (u: { role: Role }) => u.role === Role.PIC;
+      expect(isEligiblePic(adminUser)).toBe(false);
+    });
+
+    it("Verifikator DITOLAK saat dicalonkan sebagai petugas PIC", () => {
+      const isEligiblePic = (u: { role: Role }) => u.role === Role.PIC;
+      expect(isEligiblePic(verifikatorUser)).toBe(false);
     });
   });
 });
