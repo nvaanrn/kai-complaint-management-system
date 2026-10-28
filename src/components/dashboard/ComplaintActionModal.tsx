@@ -410,11 +410,13 @@ export default function ComplaintActionModal({
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
                   >
                     <option value="">-- Belum Ditugaskan --</option>
-                    {picList.map((pic) => (
-                      <option key={pic.id} value={pic.id}>
-                        {pic.name} ({pic.role})
-                      </option>
-                    ))}
+                    {picList
+                      .filter((pic) => pic.role === Role.PIC)
+                      .map((pic) => (
+                        <option key={pic.id} value={pic.id}>
+                          {pic.name} (PIC)
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>

@@ -168,8 +168,8 @@ export async function createComplaint(formData: {
             select: { id: true, role: true },
           });
 
-          if (!picUser || (picUser.role !== Role.PIC && picUser.role !== Role.ADMIN)) {
-            throw new Error("Petugas yang dipilih tidak valid atau bukan PIC.");
+          if (!picUser || picUser.role !== Role.PIC) {
+            throw new Error("Petugas yang dipilih tidak valid atau bukan petugas PIC.");
           }
 
           assignedPicId = picUser.id;
@@ -298,8 +298,8 @@ export async function assignPIC(complaintId: string, picId: string): Promise<Act
           select: { id: true, role: true },
         });
 
-        if (!targetUser || (targetUser.role !== Role.PIC && targetUser.role !== Role.ADMIN)) {
-          throw new Error("Petugas yang dipilih tidak valid atau bukan PIC.");
+        if (!targetUser || targetUser.role !== Role.PIC) {
+          throw new Error("Petugas yang dipilih tidak valid atau bukan petugas PIC.");
         }
 
         targetUserId = targetUser.id;
@@ -1246,8 +1246,8 @@ export async function editComplaintDetails(
             where: { id: cleanPic },
             select: { id: true, role: true },
           });
-          if (!picUser || (picUser.role !== Role.PIC && picUser.role !== Role.ADMIN)) {
-            throw new Error("Petugas yang dipilih tidak valid atau bukan PIC.");
+          if (!picUser || picUser.role !== Role.PIC) {
+            throw new Error("Petugas yang dipilih tidak valid atau bukan petugas PIC.");
           }
           updateData.picId = picUser.id;
           updateData.assignedAt = new Date();

@@ -38,9 +38,9 @@ export default async function DashboardPage() {
 
     rawComplaints = complaintsData as unknown as ComplaintData[];
 
-    // 2. Ambil daftar personil PIC dan Admin dari tabel User
+    // 2. Ambil daftar personil PIC dari tabel User (khusus role PIC, Admin dilarang ditugaskan sebagai PIC)
     const usersData = await prisma.user.findMany({
-      where: { role: { in: [Role.PIC as any, Role.ADMIN as any] } },
+      where: { role: Role.PIC },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true, role: true },
     });

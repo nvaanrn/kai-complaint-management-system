@@ -243,7 +243,7 @@ interface KaiDocumentPdfProps {
 
 export function KaiDocumentPdf({
   complaints,
-  documentNumber = "",
+  documentNumber = "FR.SM/TI/033.001/10-2020",
   documentDate = "12 Oktober 2020",
   version = "002-2020",
   managementRep = "Ir. Bambang Triyono (MR)",

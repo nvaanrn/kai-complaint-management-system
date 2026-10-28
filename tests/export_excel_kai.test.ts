@@ -117,6 +117,9 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
     const result = await exportComplaintsToExcel(dummyComplaints);
     const ws = result.workbook.getWorksheet("FR.SM.TI.033.001")!;
 
+    // Nomor dokumen default harus menggunakan format resmi FR.SM/TI/033.001/MM-YYYY
+    expect(ws.getCell("H1").value?.toString()).toMatch(/FR\.SM\/TI\/033\.001\/\d{2}-\d{4}/);
+
     // Baris 6 & 7: Header kolom tabel
     expect(ws.getCell("A6").value).toBe("No");
     expect(ws.getCell("G6").value).toBe("Verification");

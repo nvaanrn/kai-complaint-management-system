@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { UserSummary } from "@/types/database";
+import { UserSummary, Role } from "@/types/database";
 import { VALID_SOURCES } from "@/lib/validation";
 
 interface ComplaintCreateModalProps {
@@ -212,11 +212,13 @@ export default function ComplaintCreateModal({
                 className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
               >
                 <option value="">-- Belum Ditugaskan (Pilih Nanti) --</option>
-                {picList.map((pic) => (
-                  <option key={pic.id} value={pic.id}>
-                    {pic.name} ({pic.role})
-                  </option>
-                ))}
+                {picList
+                  .filter((pic) => pic.role === Role.PIC)
+                  .map((pic) => (
+                    <option key={pic.id} value={pic.id}>
+                      {pic.name} (PIC)
+                    </option>
+                  ))}
               </select>
             </div>
 

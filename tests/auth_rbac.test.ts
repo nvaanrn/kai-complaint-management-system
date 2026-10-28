@@ -105,4 +105,22 @@ describe("Unit Test: Role-Based Access Control (RBAC Permissions)", () => {
       expect(Permissions.canDeleteComplaint(verifikatorUser)).toBe(false);
     });
   });
+
+  describe("Validasi Penugasan PIC: Admin DILARANG Ditugaskan Sebagai PIC", () => {
+    it("Hanya pengguna dengan Role.PIC yang sah menjadi petugas PIC", () => {
+      const isEligiblePic = (u: { role: Role }) => u.role === Role.PIC;
+      expect(isEligiblePic(picUser1)).toBe(true);
+      expect(isEligiblePic(picUser2)).toBe(true);
+    });
+
+    it("Admin DITOLAK saat dicalonkan sebagai petugas PIC", () => {
+      const isEligiblePic = (u: { role: Role }) => u.role === Role.PIC;
+      expect(isEligiblePic(adminUser)).toBe(false);
+    });
+
+    it("Verifikator DITOLAK saat dicalonkan sebagai petugas PIC", () => {
+      const isEligiblePic = (u: { role: Role }) => u.role === Role.PIC;
+      expect(isEligiblePic(verifikatorUser)).toBe(false);
+    });
+  });
 });

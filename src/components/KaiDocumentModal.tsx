@@ -81,8 +81,7 @@ export default function KaiDocumentModal({
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const yyyy = d.getFullYear();
-    // Previously used FR.SM/TI/033.001 prefix; retained for document numbering logic
-    return `${mm}-${yyyy}`;
+    return `FR.SM/TI/033.001/${mm}-${yyyy}`;
   });
 
   const [docDate, setDocDate] = useState(() => {
@@ -245,6 +244,11 @@ export default function KaiDocumentModal({
   // Generate spreadsheet according to document format
   const handleExportExcelFromModal = () => {
     if (displayList.length === 0) return;
+    const sanitizedDocNum = docNumber.replace(/[\/\\:]/g, "-");
+    const safePrefix = sanitizedDocNum.toLowerCase().startsWith("fr")
+      ? sanitizedDocNum
+      : `FR_SM_TI_033_001_${sanitizedDocNum}`;
+
     exportComplaintsToExcel(displayList, {
       documentNumber: docNumber,
       documentDate: docDate,
@@ -252,7 +256,7 @@ export default function KaiDocumentModal({
       managementRep: managementRep,
       creatorName: currentUser.name || "Administrator KAI",
       pageInfo: "1 dari 1",
-      filenamePrefix: `FR_SM_TI_033_001_${docNumber.replace(/[\/\\:]/g, "-")}`,
+      filenamePrefix: safePrefix,
     });
   };
 
@@ -288,10 +292,15 @@ export default function KaiDocumentModal({
         />
       ).toBlob();
 
+      const sanitizedDocNum = docNumber.replace(/[\/\\:]/g, "-");
+      const safePdfName = sanitizedDocNum.toLowerCase().startsWith("fr")
+        ? `${sanitizedDocNum}.pdf`
+        : `FR-SM-TI-033-001_${sanitizedDocNum}.pdf`;
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `FR-SM-TI-033-001_${docNumber.replace(/[\/\\:]/g, "-")}.pdf`;
+      a.download = safePdfName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -434,7 +443,7 @@ export default function KaiDocumentModal({
             />
             <div>
               <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
-                <span>Dokumen Standar</span>
+                <span>Dokumen Standar FR.SM/TI/033.001</span>
                 <span className="text-[10px] bg-yellow-400 text-slate-950 font-black px-2 py-0.5 rounded">
                   TERBATAS
                 </span>
@@ -685,7 +694,7 @@ export default function KaiDocumentModal({
               <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Pengaturan Header Formulir (untuk dokumen)
+                    Pengaturan Header Formulir FR.SM/TI/033.001
                   </h4>
                   {!isPublished && (
                     <button
