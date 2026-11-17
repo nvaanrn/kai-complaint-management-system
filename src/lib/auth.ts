@@ -1,4 +1,5 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 import { Role } from "@/types/database";
 
 export interface AuthenticatedUser {
@@ -9,59 +10,44 @@ export interface AuthenticatedUser {
 }
 
 /**
- * Mendapatkan data pengguna yang sedang login berdasarkan sesi Supabase Auth yang terverifikasi.
+ * Mendapatkan data pengguna yang sedang login berdasarkan sesi NextAuth (JWT).
  *
- * Standar Resmi Supabase (@supabase/ssr):
- * - Menggunakan getUser() di sisi server (bukan getSession()) untuk memvalidasi token JWT
- *   ke Supabase Auth server — bukan hanya membaca cookie lokal.
- * - Role HANYA diambil dari app_metadata.role (klaim server-side yang tidak bisa diubah user).
- * - TIDAK menggunakan user_metadata.role karena user_metadata dapat diedit oleh user sendiri
- *   via Supabase client (rawan privilege escalation).
- * - Jika app_metadata.role tidak ada atau tidak valid, return null untuk mencegah akses tanpa role.
+ * Standar NextAuth v4:
+ * - Menggunakan getServerSession() di sisi server (bukan useSession) untuk akses SSR.
+ * - Role diambil dari JWT token yang di-set saat authorize() di Credentials Provider.
+ * - Jika role tidak valid, return null untuk mencegah akses tanpa role.
  */
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
   try {
-    const supabase = await createServerSupabaseClient();
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+    const session = await getServerSession(authOptions);
 
-    if (error || !user || !user.email) {
+    if (!session?.user?.email) {
       return null;
     }
 
-    // ✅ Supabase Standard: Role HANYA dari app_metadata (server-controlled, tidak bisa diubah user)
-    // app_metadata di-set oleh service_role saat createUser/updateUserById di seed-supabase-auth.ts
-    const role = user.app_metadata?.role as Role | undefined;
+    const role = (session.user as any).role as Role | undefined;
 
-    // Tolak akses jika role tidak terdefinisi atau tidak valid di app_metadata
+    // Tolak akses jika role tidak terdefinisi atau tidak valid
     const validRoles: Role[] = [Role.ADMIN, Role.PIC, Role.VERIFIKATOR];
     if (!role || !validRoles.includes(role)) {
       console.warn(
-        `[Auth] User ${user.email} tidak memiliki app_metadata.role yang valid. ` +
-        `Jalankan 'npm run seed:auth' untuk menyetel role melalui Supabase Admin API.`
+        `[Auth] User ${session.user.email} tidak memiliki role yang valid di session JWT.`
       );
       return null;
     }
 
-    // Nama dari user_metadata saja (bukan untuk otorisasi, hanya tampilan)
     const name =
-      (user.user_metadata?.name as string) ||
-      (user.user_metadata?.full_name as string) ||
-      user.email.split("@")[0];
+      session.user.name ??
+      session.user.email.split("@")[0];
 
     return {
-      id: user.id,
+      id: (session.user as any).id as string,
       name,
-      email: user.email,
+      email: session.user.email,
       role,
     };
   } catch (error: any) {
-    if (error?.digest === "DYNAMIC_SERVER_USAGE" || error?.message?.includes("DYNAMIC_SERVER_USAGE")) {
-      throw error;
-    }
-    console.error("Gagal mendapatkan current user dari Supabase Auth:", error);
+    console.error("Gagal mendapatkan current user dari NextAuth session:", error);
     return null;
   }
 }

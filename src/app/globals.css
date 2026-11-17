@@ -11,3 +11,147 @@ body {
   color: var(--foreground);
   background-color: var(--background);
 }
+
+/* ==============================================================================
+ * ATURAN CETAK (PRINT CSS) RESMI DOKUMEN KAI FR.SM/TI/033.001
+ * ============================================================================== */
+@page {
+  size: A4 landscape;
+  margin: 8mm 10mm 10mm 10mm;
+}
+
+@media print {
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  html,
+  body {
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    font-size: 9pt !important;
+  }
+
+  /* Hilangkan elemen non-cetak dan UI chrome dari alur layout sepenuhnya */
+  .no-print,
+  .print\:hidden,
+  aside,
+  header,
+  nav,
+  main,
+  button,
+  input,
+  select,
+  .modal-action-bar {
+    display: none !important;
+  }
+
+  /* Reset pembungkus modal agar mengalir alami dari awal halaman cetak */
+  .kai-document-modal-overlay {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .kai-document-modal-card {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .kai-document-modal-body {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    max-height: none !important;
+    background: transparent !important;
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Kontainer dokumen cetak KAI - mengalir alami (static flow) agar multi-halaman tidak terpotong */
+  .kai-printable-container {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  /* Pengaturan tabel formulir cetak baku KAI */
+  table.kai-doc-table,
+  table.kai-document-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+    font-size: 8pt !important;
+    line-height: 1.25 !important;
+  }
+
+  table.kai-doc-table thead,
+  table.kai-document-table thead {
+    display: table-header-group !important;
+  }
+
+  table.kai-doc-table tfoot,
+  table.kai-document-table tfoot {
+    display: table-footer-group !important;
+  }
+
+  table.kai-doc-table tr,
+  table.kai-document-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  table.kai-doc-table th,
+  table.kai-doc-table td,
+  table.kai-document-table th,
+  table.kai-document-table td {
+    border: 1px solid #000000 !important;
+    padding: 3px 4px !important;
+  }
+
+  /* Blok tanda tangan & kop yang tidak boleh terpotong di tengah baris */
+  .kai-keep-together,
+  .kai-header-block,
+  .kai-signature-block,
+  .kai-footer-block {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
