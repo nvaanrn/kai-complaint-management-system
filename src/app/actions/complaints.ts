@@ -22,6 +22,7 @@ import {
 import { formatComplaintNumber, parseNextSequence } from "@/lib/complaintNumber";
 import { Permissions } from "@/lib/permissions";
 import { validateStateTransition } from "@/lib/state-machine";
+import { computeSlaSnapshot } from "@/lib/slaSnapshot";
 
 export interface ActionResponse<T = any> {
   success: boolean;
@@ -178,6 +179,33 @@ export async function createComplaint(formData: {
         }
 
         // 3. Buat baris keluhan baru
+        // Fetch default category master
+        const defaultCategoryMaster = await tx.complaintCategoryMaster.findUnique({
+          where: { name: 'Umum / Belum Dikategorikan' },
+        });
+        if (!defaultCategoryMaster) {
+          throw new Error('Default ComplaintCategoryMaster "Umum / Belum Dikategorikan" not found');
+        }
+
+        // Resolve sourceId if possible
+        let sourceId: string | null = null;
+        if (formData.source) {
+          const src = await tx.complaintSource.findFirst({
+            where: { name: formData.source.trim() },
+          });
+          if (src) sourceId = src.id;
+        }
+        // Resolve areaId if possible
+        let areaId: string | null = null;
+        if (formData.daopOrStation) {
+          const area = await tx.operationalArea.findFirst({
+            where: { name: formData.daopOrStation.trim() },
+          });
+          if (area) areaId = area.id;
+        }
+        // Compute SLA snapshot
+        const { slaHours, slaStartAt, slaDeadlineInitial, slaDeadline } = computeSlaSnapshot(validDate);
+
         const newComplaint = await tx.complaint.create({
           data: {
             complaintNumber,
@@ -185,12 +213,21 @@ export async function createComplaint(formData: {
             customerContact: formData.customerContact?.trim() || null,
             daopOrStation: formData.daopOrStation?.trim() || null,
             source: formData.source,
+            sourceId,
+            areaId,
+            categoryId: defaultCategoryMaster.id,
+            // keep enum category for backwards compatibility
             category: (formData.category as ComplaintCategory) || null,
             description: formData.description.trim(),
             date: validDate,
             status: initialStatus,
             picId: assignedPicId,
             assignedAt,
+            // SLA fields
+            slaHours,
+            slaStartAt,
+            slaDeadlineInitial,
+            slaDeadline,
           },
         });
 
