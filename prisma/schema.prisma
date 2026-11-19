@@ -1,3 +1,7 @@
+// ========================
+// Prisma schema (updated for Tahap 2)
+// ========================
+
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
@@ -8,8 +12,8 @@ generator client {
 }
 
 // ==============================================================================
-// ENUMS
-// ==============================================================================
+// ENUMS (tetap dipertahankan untuk kompatibilitas kode lama)
+// ===============================================================================
 
 enum Role {
   ADMIN
@@ -70,21 +74,22 @@ enum AuditAction {
 
 // ==============================================================================
 // MODELS
-// ==============================================================================
+// ===============================================================================
 
 model User {
-  id              String          @id @default(uuid())
-  name            String
-  email           String          @unique
-  password        String
-  role            Role            @default(PIC)
-  assignedTasks   Complaint[]     @relation("PicComplaints")
-  verifications   Verification[]  @relation("VerifierRecords")
-  documents       Document[]      @relation("DocCreator")
-  reopenRequests  ReopenRequest[] @relation("ReopenRequester")
-  reviewedReopens ReopenRequest[] @relation("ReopenReviewer")
-  auditLogs       AuditLog[]      @relation("UserAuditLogs")
-  createdAt       DateTime        @default(now())
+  id                String              @id @default(uuid())
+  name              String
+  email             String              @unique
+  password          String
+  role              Role                @default(PIC)
+  assignedTasks     Complaint[]         @relation("PicComplaints")
+  verifications     Verification[]      @relation("VerifierRecords")
+  documents         Document[]          @relation("DocCreator")
+  reopenRequests    ReopenRequest[]     @relation("ReopenRequester")
+  reviewedReopens   ReopenRequest[]     @relation("ReopenReviewer")
+  auditLogs         AuditLog[]          @relation("UserAuditLogs")
+  createdAt         DateTime            @default(now())
+  ComplaintAuditLog ComplaintAuditLog[]
 
   @@index([role])
 }
@@ -125,22 +130,46 @@ model Complaint {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // -------------------------------------------------------------
+  // 2A – Penambahan kolom master & SLA (sementara nullable)
+  // -------------------------------------------------------------
+  areaId     String? @map("areaId") @db.VarChar(191) // FK ke OperationalArea (nullable untuk migrasi)
+  sourceId   String? @map("sourceId") @db.VarChar(191) // FK ke ComplaintSource (nullable untuk migrasi)
+  categoryId String  @map("categoryId") @db.VarChar(191) // FK ke ComplaintCategoryMaster (non‑null after backfill)
+
+  slaHours           Int?      @map("slaHours") // snapshot SLA saat keluhan dibuat
+  slaStartAt         DateTime? @map("slaStartAt") // saat SLA mulai dihitung
+  slaDeadlineInitial DateTime? @map("slaDeadlineInitial") // deadline awal (tidak pernah berubah)
+  slaDeadline        DateTime? @map("slaDeadline") // deadline efektif (berubah bila ditolak)
+
+  // Relations to master tables
+  operationalArea   OperationalArea?        @relation("ComplaintOperationalArea", fields: [areaId], references: [id], map: "fk_complaint_operational_area")
+  complaintSource   ComplaintSource?        @relation("ComplaintSource", fields: [sourceId], references: [id])
+  complaintCategory ComplaintCategoryMaster @relation("ComplaintCategoryMaster", fields: [categoryId], references: [id])
+  SlaExtension      SlaExtension?
+  ComplaintAuditLog ComplaintAuditLog[]
+
   @@index([status])
   @@index([createdAt])
   @@index([category])
   @@index([status, picId])
+  @@index([categoryId])
+  @@index([areaId])
+  @@index([sourceId])
+  @@index([slaDeadline])
 }
 
 model Verification {
-  id          String             @id @default(uuid())
-  complaintId String
-  complaint   Complaint          @relation("ComplaintVerifications", fields: [complaintId], references: [id], onDelete: Cascade)
-  verifierId  String
-  verifier    User               @relation("VerifierRecords", fields: [verifierId], references: [id], onDelete: Restrict)
-  result      VerificationResult
-  feedback    String?            @db.Text // Kesimpulan verifikasi atau alasan penolakan
-  cycle       Int                @default(1) // Nomor putaran siklus pengajuan & verifikasi
-  verifiedAt  DateTime           @default(now())
+  id           String             @id @default(uuid())
+  complaintId  String
+  complaint    Complaint          @relation("ComplaintVerifications", fields: [complaintId], references: [id], onDelete: Cascade)
+  verifierId   String
+  verifier     User               @relation("VerifierRecords", fields: [verifierId], references: [id], onDelete: Restrict)
+  result       VerificationResult
+  feedback     String?            @db.Text // Kesimpulan verifikasi atau alasan penolakan
+  cycle        Int                @default(1) // Nomor putaran siklus pengajuan & verifikasi
+  verifiedAt   DateTime           @default(now())
+  SlaExtension SlaExtension?
 
   @@index([complaintId, verifiedAt])
 }
@@ -174,7 +203,7 @@ model Document {
   parentDocumentId String?
   parentDocument   Document?      @relation("DocumentRevisions", fields: [parentDocumentId], references: [id], onDelete: Restrict)
   revisions        Document[]     @relation("DocumentRevisions")
-  revisionReason   String?        @db.Text // Alasan penerbitan revisi jika merevisi dokumen lama
+  revisionReason   String?        @db.Text // Alasan penerbitan revisi jika menerbitkan dokumen lama
   status           DocumentStatus @default(PUBLISHED)
   documentDate     DateTime // Tanggal penetapan dokumen
   publishedAt      DateTime?      @default(now()) // Waktu penerbitan resmi
@@ -211,7 +240,6 @@ model AuditLog {
   @@index([action, createdAt])
 }
 
-// Counter atomik untuk nomor keluhan yang aman terhadap konkurensi
 model ComplaintCounter {
   id           String   @id @default(uuid())
   year         Int      @unique // Tahun berjalan, di-reset setiap tahun
@@ -219,7 +247,6 @@ model ComplaintCounter {
   updatedAt    DateTime @updatedAt
 }
 
-// Counter atomik untuk nomor dokumen audit FR.SM/TI/033.001 yang aman terhadap konkurensi
 model DocumentCounter {
   id           String   @id @default(uuid())
   year         Int
@@ -228,4 +255,106 @@ model DocumentCounter {
   updatedAt    DateTime @updatedAt
 
   @@unique([year, month])
+}
+
+// -------------------------------------------------------------
+// 2A – Master data baru (perlu seed)
+// -------------------------------------------------------------
+model OperationalArea {
+  id        String   @id @default(uuid())
+  name      String   @unique @db.VarChar(191) // contoh: “Daop 1 Jakarta”
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  complaints Complaint[] @relation("ComplaintOperationalArea")
+}
+
+model ComplaintSource {
+  id        String   @id @default(uuid())
+  name      String   @unique @db.VarChar(191) // contoh: “Survey”, “Telepon”, “Email”, dll.
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  complaints Complaint[] @relation("ComplaintSource")
+}
+
+model ComplaintCategoryMaster {
+  id          String   @id @default(uuid())
+  name        String   @unique @db.VarChar(191) // mis. “Umum / Belum Dikategorikan”
+  slaHours    Int // target SLA dalam jam kerja
+  description String? // opsional
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  complaints Complaint[] @relation("ComplaintCategoryMaster")
+}
+
+// -------------------------------------------------------------
+// 2A – SLA ekstensi (verifikator menolak)
+// -------------------------------------------------------------
+model SlaExtension {
+  id                String       @id @default(uuid())
+  complaintId       String       @unique // satu ekstensi per keluhan
+  complaint         Complaint    @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  verificationId    String       @unique
+  verification      Verification @relation(fields: [verificationId], references: [id])
+  extraWorkingHours Int
+  rejectedAt        DateTime
+  newDeadline       DateTime
+  createdAt         DateTime     @default(now())
+}
+
+// -------------------------------------------------------------
+// 2A – Audit log keluhan (detail perubahan)
+// -------------------------------------------------------------
+model ComplaintAuditLog {
+  id          String     @id @default(uuid())
+  complaintId String?
+  complaint   Complaint? @relation(fields: [complaintId], references: [id], onDelete: Restrict)
+  action      String
+  oldValue    Json?
+  newValue    Json?
+  actorId     String?
+  actor       User?      @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt   DateTime   @default(now())
+
+  @@index([complaintId])
+  @@index([createdAt])
+}
+
+// -------------------------------------------------------------
+// 2A – Hari libur (Kalender)
+// -------------------------------------------------------------
+model Holiday {
+  id        String   @id @default(uuid())
+  date      DateTime @unique @db.Date
+  name      String
+  createdAt DateTime @default(now())
+}
+
+// -------------------------------------------------------------
+// 2A – Arsip laporan bulanan
+// -------------------------------------------------------------
+enum MonthlyReportStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model MonthlyReport {
+  id            String              @id @default(uuid())
+  period        String              @unique @db.VarChar(7) // format YYYY‑MM
+  storageKey    String?
+  sha256        String?             @db.VarChar(64)
+  status        MonthlyReportStatus
+  error         String?             @db.Text
+  generatedAt   DateTime?
+  generatedById String? // null = sistem, else User.id
+  createdAt     DateTime            @default(now())
+
+  @@index([status])
+  @@index([generatedAt])
 }

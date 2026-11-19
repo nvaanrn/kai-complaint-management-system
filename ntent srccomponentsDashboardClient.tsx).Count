@@ -1,0 +1,7 @@
+  feat/mysql-migration         [m b9c2909 feat(auth): implement custom NIPP authentication and session management
++ [36mfeat/schema-v2               [m b9c2909 ([36mC:/Users/novaa/.gemini/antigravity/worktrees/SPKP/fix_document_header_constants[m) feat(auth): implement custom NIPP authentication and session management
+  fix_document_header_constants[m ad0b5e3 refactor(dashboard): decompose DashboardClient into modular components
+  main                         [m 8ab19f8 [[34morigin/main[m] fix(storage): add RLS policies for complaint-proofs bucket
+* [32mperbaikan                    [m 406422d [[34morigin/perbaikan[m] feat: perbaikan penomoran otomatis & penerbitan dokumen resmi FR.SM/TI/033.001
++ [36mproject_technical_audit      [m 8ab19f8 ([36mC:/Users/novaa/.gemini/antigravity/worktrees/SPKP/project_technical_audit[m) fix(storage): add RLS policies for complaint-proofs bucket
++ [36mtechnical_audit_kai_revisions[m 8ab19f8 ([36mC:/Users/novaa/.gemini/antigravity/worktrees/SPKP/technical_audit_kai_revisions[m) fix(storage): add RLS policies for complaint-proofs bucket

@@ -16,7 +16,6 @@ import {
   deleteComplaint,
   editComplaintDetails,
 } from "@/app/actions/complaints";
-import { exportComplaintsToExcel } from "@/lib/exportExcel";
 
 // Modular Subcomponents
 import DashboardSidebar from "./dashboard/DashboardSidebar";
@@ -529,7 +528,8 @@ export default function DashboardClient({
             onOpenDocModal={() => setIsDocModalOpen(true)}
             onExportExcel={
               currentUser.role === Role.ADMIN
-                ? () => {
+                ? async () => {
+                    const { exportComplaintsToExcel } = await import("@/lib/exportExcel");
                     exportComplaintsToExcel(displayedComplaints, {
                       creatorName: currentUser.name || "Administrator SPKP",
                       filenamePrefix: "FR_SM_TI_033_001_Keluhan_Pelanggan_KAI",

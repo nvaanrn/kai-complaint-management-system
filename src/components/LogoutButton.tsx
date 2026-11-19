@@ -9,7 +9,8 @@ export default function LogoutButton() {
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-      await signOut({ callbackUrl: "/login" });
+      await signOut({ redirect: false });
+      window.location.href = "/login";
     } catch (error) {
       console.error("Gagal logout:", error);
       setIsLoggingOut(false);

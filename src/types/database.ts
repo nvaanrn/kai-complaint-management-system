@@ -103,6 +103,14 @@ export interface ComplaintData {
   customerContact?: string | null;
   daopOrStation?: string | null;
   source: string;
+  // NEW FIELDS (master references & SLA snapshot)
+  areaId?: string | null;          // FK ke OperationalArea (nullable di migration pertama)
+  sourceId?: string | null;        // FK ke ComplaintSource (nullable di migration pertama)
+  categoryId?: string;             // FK ke ComplaintCategoryMaster (non‑null setelah backfill)
+  slaHours?: number;               // Snapshot SLA jam kerja
+  slaStartAt?: Date | string;      // Saat SLA mulai dihitung
+  slaDeadlineInitial?: Date | string; // Deadline awal (calendar)
+  slaDeadline?: Date | string;     // Deadline efektif (setelah extend)
   category?: ComplaintCategory | null;
   description: string;
   status: ComplaintStatus;

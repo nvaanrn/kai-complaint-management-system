@@ -6,52 +6,39 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Mulai proses seeding database...');
 
-  // Hash password default untuk semua user awal
   const defaultPassword = await bcrypt.hash('password123', 10);
 
   // 1. Buat User Admin
   const admin = await prisma.user.upsert({
     where: { email: 'admin@spkp.kai.id' },
     update: {},
-    create: {
-      name: 'Administrator SPKP',
-      email: 'admin@spkp.kai.id',
-      password: defaultPassword,
-      role: Role.ADMIN,
-    },
+    create: { name: 'Administrator SPKP', email: 'admin@spkp.kai.id', password: defaultPassword, role: Role.ADMIN },
   });
 
-  // 2. Buat User PIC (Penanggung Jawab / Penanganan)
+  // 2. Buat User PIC
   const pic = await prisma.user.upsert({
     where: { email: 'pic@spkp.kai.id' },
     update: {},
-    create: {
-      name: 'Budi Santoso (PIC Operasional)',
-      email: 'pic@spkp.kai.id',
-      password: defaultPassword,
-      role: Role.PIC,
-    },
+    create: { name: 'Budi Santoso (PIC Operasional)', email: 'pic@spkp.kai.id', password: defaultPassword, role: Role.PIC },
   });
 
   // 3. Buat User Verifikator
-  const verifikator = await prisma.user.upsert({
+  const verifier = await prisma.user.upsert({
     where: { email: 'verifikator@spkp.kai.id' },
     update: {},
-    create: {
-      name: 'Siti Rahma (Tim Verifikasi)',
-      email: 'verifikator@spkp.kai.id',
-      password: defaultPassword,
-      role: Role.VERIFIKATOR,
-    },
+    create: { name: 'Siti Rahma (Tim Verifikasi)', email: 'verifikator@spkp.kai.id', password: defaultPassword, role: Role.VERIFIKATOR },
   });
 
-  console.log('✅ User berhasil di-seed di tabel database:');
-  console.log(`   - Admin       : ${admin.email}`);
-  console.log(`   - PIC         : ${pic.email}`);
-  console.log(`   - Verifikator : ${verifikator.email}`);
-  console.log('   (Password untuk semua akun: password123)\n');
+  console.log('✅ Users ter‑seed', { admin: admin.email, pic: pic.email, verifier: verifier.email });
 
-  // 4. Buat Sample Data Keluhan (Complaints) dengan Sumber Resmi KAI
+  // 4. Seed master category (default)
+  const defaultCategory = await prisma.complaintCategoryMaster.upsert({
+    where: { name: 'Umum / Belum Dikategorikan' },
+    update: {},
+    create: { name: 'Umum / Belum Dikategorikan', slaHours: 24, isActive: true },
+  });
+
+  // 5. Sample complaints (harus menyertakan categoryId)
   const complaints = [
     {
       complaintNumber: 'CMP-2026-001',
@@ -91,28 +78,24 @@ async function main() {
   for (const item of complaints) {
     await prisma.complaint.upsert({
       where: { complaintNumber: item.complaintNumber },
-      update: {
-        source: item.source,
-      },
-      create: item,
+      update: { source: item.source },
+      create: { ...item, categoryId: defaultCategory.id },
     });
   }
 
-  // 5. Inisialisasi ComplaintCounter agar sinkron dengan urutan data keluhan
+  // 6. Sinkronisasi Counter
   await prisma.complaintCounter.upsert({
     where: { year: 2026 },
     update: { lastSequence: complaints.length },
     create: { year: 2026, lastSequence: complaints.length },
   });
 
-  console.log(`✅ ${complaints.length} Data keluhan awal berhasil di-seed dengan sumber resmi.`);
-  console.log(`✅ ComplaintCounter tahun 2026 berhasil disinkronkan ke sequence ${complaints.length}.`);
-  console.log('🎉 Seeding selesai dengan sukses!');
+  console.log(`✅ ${complaints.length} complaints ter‑seed, counter sync selesai.`);
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Terjadi kesalahan saat seeding:', e);
+    console.error('❌ Seed error:', e);
     process.exit(1);
   })
   .finally(async () => {

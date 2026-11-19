@@ -27,8 +27,8 @@ export default function LoginPage() {
       if (result?.error) {
         setErrorMsg("Email atau kata sandi tidak sesuai. Silakan periksa kembali.");
       } else {
-        router.push("/dashboard");
-        router.refresh();
+        // Gunakan hard redirect agar session cookie dan middleware tersinkronisasi seketika
+        window.location.href = "/dashboard";
       }
     } catch (err: any) {
       setErrorMsg("Terjadi gangguan koneksi saat masuk ke sistem.");

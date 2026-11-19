@@ -8,7 +8,6 @@ import {
   getPublishedDocumentsList,
   getNextAvailableDocumentNumberAction,
 } from "@/app/actions/complaints";
-import { exportComplaintsToExcel } from "@/lib/exportExcel";
 import KaiDocumentView from "./KaiDocumentView";
 import Image from "next/image";
 
@@ -268,13 +267,14 @@ export default function KaiDocumentModal({
 
   // FITUR EKSPOR EXCEL
   // Generate spreadsheet according to document format
-  const handleExportExcelFromModal = () => {
+  const handleExportExcelFromModal = async () => {
     if (displayList.length === 0) return;
     const sanitizedDocNum = docNumber.replace(/[\/\\:]/g, "-");
     const safePrefix = sanitizedDocNum.toLowerCase().startsWith("fr")
       ? sanitizedDocNum
       : `FR_SM_TI_033_001_${sanitizedDocNum}`;
 
+    const { exportComplaintsToExcel } = await import("@/lib/exportExcel");
     exportComplaintsToExcel(displayList, {
       documentNumber: docNumber,
       documentDate: docDate,
