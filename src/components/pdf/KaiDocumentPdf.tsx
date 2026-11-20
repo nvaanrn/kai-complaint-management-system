@@ -1,6 +1,7 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image as PdfImage } from "@react-pdf/renderer";
 import { ComplaintData } from "@/components/DashboardClient";
+import { DOCUMENT_HEADER } from "@/config/documentTemplate";
 
 const styles = StyleSheet.create({
   page: {
@@ -233,9 +234,7 @@ const styles = StyleSheet.create({
 
 interface KaiDocumentPdfProps {
   complaints: ComplaintData[];
-  documentNumber?: string;
   documentDate?: string;
-  version?: string;
   managementRep?: string;
   creatorName?: string;
   logoUrl?: string;
@@ -243,9 +242,7 @@ interface KaiDocumentPdfProps {
 
 export function KaiDocumentPdf({
   complaints,
-  documentNumber = "FR.SM/TI/033.001/10-2020",
   documentDate = "12 Oktober 2020",
-  version = `001-${new Date().getFullYear()}`,
   managementRep = "Ir. Bambang Triyono (MR)",
   creatorName = "Petugas SPKP KAI",
   logoUrl,
@@ -266,7 +263,7 @@ export function KaiDocumentPdf({
   };
 
   return (
-    <Document title={`Dokumen-KAI-${documentNumber.replace(/[\/\\:]/g, "-")}`}>
+    <Document title={`Dokumen-KAI-${DOCUMENT_HEADER.DOCUMENT_NUMBER.replace(/[\/\\:]/g, "-")}`}>
       <Page size="A4" orientation="landscape" style={styles.page}>
         {/* 1. KOP / HEADER BAKU KAI 3-BAGIAN */}
         <View style={styles.headerBox}>
@@ -306,7 +303,7 @@ export function KaiDocumentPdf({
           <View style={styles.headerRight}>
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>No. Dokumen</Text>
-              <Text style={styles.metaValue}>: {documentNumber}</Text>
+              <Text style={styles.metaValue}>: {DOCUMENT_HEADER.DOCUMENT_NUMBER}</Text>
             </View>
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>Tanggal</Text>
@@ -314,7 +311,7 @@ export function KaiDocumentPdf({
             </View>
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>Versi</Text>
-              <Text style={styles.metaValue}>: {version}</Text>
+              <Text style={styles.metaValue}>: {DOCUMENT_HEADER.VERSION}</Text>
             </View>
             <View style={styles.metaRowLast}>
               <Text style={styles.metaLabel}>Halaman</Text>

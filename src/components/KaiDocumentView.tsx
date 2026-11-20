@@ -2,12 +2,11 @@
 
 import React from "react";
 import { ComplaintData } from "@/types/database";
+import { DOCUMENT_HEADER } from "@/config/documentTemplate";
 
 export interface KaiDocumentViewProps {
   complaints: ComplaintData[];
-  documentNumber?: string;
   documentDate?: string;
-  version?: string;
   managementRep?: string;
   creatorName?: string;
   pageInfo?: string;
@@ -16,9 +15,7 @@ export interface KaiDocumentViewProps {
 
 export default function KaiDocumentView({
   complaints,
-  documentNumber = "FR.SM/TI/033.001/10-2020",
   documentDate = "12 Oktober 2020",
-  version = `001-${new Date().getFullYear()}`,
   managementRep = "Ir. Bambang Triyono (MR)",
   creatorName = "Petugas SPKP KAI",
   pageInfo = "1 dari 1",
@@ -107,7 +104,7 @@ export default function KaiDocumentView({
           <div className="col-span-3 text-[10px] divide-y divide-black">
             <div className="grid grid-cols-12 divide-x divide-black py-1">
               <span className="col-span-5 px-2 font-medium">No. Dokumen</span>
-              <span className="col-span-7 px-2 font-mono font-bold break-all text-[9px]">: {documentNumber}</span>
+              <span className="col-span-7 px-2 font-mono font-bold break-all text-[9px]">: {DOCUMENT_HEADER.DOCUMENT_NUMBER}</span>
             </div>
             <div className="grid grid-cols-12 divide-x divide-black py-1">
               <span className="col-span-5 px-2 font-medium">Tanggal</span>
@@ -115,7 +112,7 @@ export default function KaiDocumentView({
             </div>
             <div className="grid grid-cols-12 divide-x divide-black py-1">
               <span className="col-span-5 px-2 font-medium">Versi</span>
-              <span className="col-span-7 px-2 font-mono font-bold truncate">: {version}</span>
+              <span className="col-span-7 px-2 font-mono font-bold truncate">: {DOCUMENT_HEADER.VERSION}</span>
             </div>
             <div className="grid grid-cols-12 divide-x divide-black py-1">
               <span className="col-span-5 px-2 font-medium">Halaman</span>

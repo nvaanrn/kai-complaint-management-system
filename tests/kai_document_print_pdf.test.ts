@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ComplaintStatus, Role } from "@/types/database";
 import { Permissions } from "@/lib/permissions";
+import { DOCUMENT_HEADER } from "@/config/documentTemplate";
 
 describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
   const sampleComplaints = [
@@ -290,16 +291,16 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
     it("Validasi kontrak struktur data dan metadata dokumen KAI sebelum kompilasi PDF", () => {
       const pdfPayload = {
         complaints: sampleComplaints,
-        documentNumber: "FR.SM/TI/033.001/10-2026",
         documentDate: "12 Oktober 2026",
-        version: "002-2020",
         managementRep: "Ir. Bambang Triyono (MR)",
         creatorName: "Petugas SPKP KAI",
       };
 
       expect(pdfPayload.complaints.length).toBe(2);
-      expect(pdfPayload.documentNumber).toMatch(/^FR\.SM\/TI\/033\.001\/\d{2}-\d{4}$/);
-      expect(pdfPayload.version).toBe("002-2020");
+      // R7: nomor dan versi tidak lagi bagian payload, selalu dari DOCUMENT_HEADER
+      expect(pdfPayload).not.toHaveProperty("documentNumber");
+      expect(pdfPayload).not.toHaveProperty("version");
+      expect(DOCUMENT_HEADER.DOCUMENT_NUMBER).toBe("FR.SM/TI/033.001/10-2020");
       expect(pdfPayload.managementRep).toContain("MR");
     });
   });
@@ -399,45 +400,16 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
     });
 
     it("4. Nomor, tanggal, dan versi konsisten sesuai spesifikasi KAI", () => {
-      const targetDate = new Date("2026-10-18T06:00:00Z");
-      const mm = String(targetDate.getMonth() + 1).padStart(2, "0");
-      const yyyy = targetDate.getFullYear();
-      const expectedDocNumber = `FR.SM/TI/033.001/${mm}-${yyyy}`;
-      const standardVersion = "002-2020";
-
-      expect(expectedDocNumber).toBe("FR.SM/TI/033.001/10-2026");
-      expect(standardVersion).toBe("002-2020");
-      expect(targetDate.toISOString()).toContain("2026-10-18");
+      // R7: nomor dan versi paten, tidak bergantung tanggal penerbitan
+      expect(DOCUMENT_HEADER.DOCUMENT_NUMBER).toBe("FR.SM/TI/033.001/10-2020");
+      expect(DOCUMENT_HEADER.VERSION).toMatch(/^\d{3}-\d{4}$/);
     });
 
-    it("5. Dua penerbitan bersamaan (konkuren) tidak menghasilkan nomor yang sama", async () => {
-      // Mock DocumentCounter state atomik
-      let currentSequence = 0;
-      const atomicCounterUpsert = async () => {
-        // Simulasi database mutex lock pada baris (year, month)
-        currentSequence += 1;
-        return { lastSequence: currentSequence };
-      };
-
-      const generateDocNumberMock = async (date: Date) => {
-        const mm = String(date.getMonth() + 1).padStart(2, "0");
-        const yyyy = date.getFullYear();
-        const counter = await atomicCounterUpsert();
-        const seqStr = String(counter.lastSequence).padStart(3, "0");
-        return `FR.SM/TI/033.${seqStr}/${mm}-${yyyy}`;
-      };
-
-      const now = new Date("2026-10-18T00:00:00Z");
-
-      // Simulasikan 2 request penerbitan berjalan berbarengan (Promise.all)
-      const [numA, numB] = await Promise.all([
-        generateDocNumberMock(now),
-        generateDocNumberMock(now),
-      ]);
-
-      expect(numA).not.toBe(numB);
-      expect([numA, numB]).toContain("FR.SM/TI/033.001/10-2026");
-      expect([numA, numB]).toContain("FR.SM/TI/033.002/10-2026");
+    it("5. Dua penerbitan bersamaan memakai nomor kop paten yang sama", () => {
+      // R7: nomor kop tidak lagi diurutkan per penerbitan. Dokumen dibedakan lewat id dan revisi.
+      const issue = () => DOCUMENT_HEADER.DOCUMENT_NUMBER;
+      expect(issue()).toBe(issue());
+      expect(issue()).toBe("FR.SM/TI/033.001/10-2020");
     });
 
     it("6. Kegagalan transaksi tidak meninggalkan dokumen parsial", async () => {

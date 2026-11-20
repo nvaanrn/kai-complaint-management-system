@@ -1,11 +1,10 @@
 import ExcelJS from "exceljs";
 import { ComplaintData } from "@/components/DashboardClient";
 import { KAI_LOGO_BASE64 } from "@/lib/kaiLogoBase64";
+import { DOCUMENT_HEADER } from "@/config/documentTemplate";
 
 export interface ExcelExportOptions {
-  documentNumber?: string;
   documentDate?: string;
-  version?: string;
   creatorName?: string;
   managementRep?: string;
   pageInfo?: string;
@@ -64,10 +63,8 @@ export async function exportComplaintsToExcel(
       ? { filenamePrefix: options }
       : options || {};
 
-  const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0");
-  const currentYear = new Date().getFullYear();
-
-  const docNumber = opts.documentNumber || `FR.SM/TI/033.001/${currentMonth}-${currentYear}`;
+  // R7: nomor dan versi kop bersifat paten, hanya dari konstanta.
+  const docNumber = DOCUMENT_HEADER.DOCUMENT_NUMBER;
   const docDate =
     opts.documentDate ||
     new Date().toLocaleDateString("id-ID", {
@@ -75,7 +72,7 @@ export async function exportComplaintsToExcel(
       month: "long",
       year: "numeric",
     });
-  const docVersion = opts.version || `001-${currentYear}`;
+  const docVersion = DOCUMENT_HEADER.VERSION;
   const creatorName = opts.creatorName || "Administrator SPKP";
   const managementRep = opts.managementRep || "Ir. Bambang Triyono (MR)";
   const pageInfo = opts.pageInfo || "1 dari 1";

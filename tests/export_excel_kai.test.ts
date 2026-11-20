@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { exportComplaintsToExcel } from "@/lib/exportExcel";
 import { ComplaintData } from "@/components/DashboardClient";
 import { ComplaintStatus, Role, VerificationResult } from "@/types/database";
+import { DOCUMENT_HEADER } from "@/config/documentTemplate";
 
 describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI", () => {
   const dummyComplaints: ComplaintData[] = [
@@ -70,9 +71,7 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
 
   it("1. Harus menyematkan logo resmi KAI dan seluruh elemen identitas baku PDF", async () => {
     const result = await exportComplaintsToExcel(dummyComplaints, {
-      documentNumber: "FR.SM/TI/033.001/10-2026",
       documentDate: "26 Oktober 2026",
-      version: "002-2020",
       creatorName: "Administrator SPKP",
       managementRep: "Ir. Bambang Triyono (MR)",
       pageInfo: "1 dari 1",
@@ -101,13 +100,13 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
 
     // Metadata Dokumen di Sisi Kanan (No. Dokumen, Tanggal, Versi, Halaman)
     expect(ws.getCell("G1").value?.toString()).toBe("No. Dokumen");
-    expect(ws.getCell("H1").value?.toString()).toContain("FR.SM/TI/033.001/10-2026");
+    expect(ws.getCell("H1").value?.toString()).toContain(DOCUMENT_HEADER.DOCUMENT_NUMBER);
 
     expect(ws.getCell("G2").value?.toString()).toBe("Tanggal");
     expect(ws.getCell("H2").value?.toString()).toContain("26 Oktober 2026");
 
     expect(ws.getCell("G3").value?.toString()).toBe("Versi");
-    expect(ws.getCell("H3").value?.toString()).toContain("002-2020");
+    expect(ws.getCell("H3").value?.toString()).toContain(DOCUMENT_HEADER.VERSION);
 
     expect(ws.getCell("G4").value?.toString()).toBe("Halaman");
     expect(ws.getCell("H4").value?.toString()).toContain("1 dari 1");
@@ -117,12 +116,9 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
     const result = await exportComplaintsToExcel(dummyComplaints);
     const ws = result.workbook.getWorksheet("FR.SM.TI.033.001")!;
 
-    // Nomor dokumen default harus menggunakan format resmi FR.SM/TI/033.001/MM-YYYY
-    expect(ws.getCell("H1").value?.toString()).toMatch(/FR\.SM\/TI\/033\.001\/\d{2}-\d{4}/);
-
-    // Versi default harus menggunakan format dinamis 001-YYYY jika tidak dispesifikasikan
-    const currentYear = new Date().getFullYear();
-    expect(ws.getCell("H3").value?.toString()).toContain(`001-${currentYear}`);
+    // R7: nomor dokumen dan versi kop bersifat paten, selalu dari DOCUMENT_HEADER
+    expect(ws.getCell("H1").value?.toString()).toContain(DOCUMENT_HEADER.DOCUMENT_NUMBER);
+    expect(ws.getCell("H3").value?.toString()).toContain(DOCUMENT_HEADER.VERSION);
 
     // Baris 6 & 7: Header kolom tabel
     expect(ws.getCell("A6").value).toBe("No");
@@ -188,7 +184,6 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
       creatorName: "Administrator SPKP",
       managementRep: "Ir. Bambang Triyono (MR)",
       documentDate: "26 Oktober 2026",
-      version: "002-2020",
     });
     const ws = result.workbook.getWorksheet("FR.SM.TI.033.001")!;
 
@@ -239,9 +234,7 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
     const fs = await import("fs");
     const path = await import("path");
     const result = await exportComplaintsToExcel(dummyComplaints, {
-      documentNumber: "FR.SM/TI/033.001/10-2026",
       documentDate: "26 Oktober 2026",
-      version: "002-2020",
       creatorName: "Administrator SPKP",
       managementRep: "Ir. Bambang Triyono (MR)",
       pageInfo: "1 dari 1",

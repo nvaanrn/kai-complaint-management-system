@@ -6,9 +6,9 @@ import {
   createDocumentBatch,
   getPublishedDocument,
   getPublishedDocumentsList,
-  getNextAvailableDocumentNumberAction,
 } from "@/app/actions/complaints";
 import KaiDocumentView from "./KaiDocumentView";
+import { DOCUMENT_HEADER } from "@/config/documentTemplate";
 import Image from "next/image";
 
 interface KaiDocumentModalProps {
@@ -79,13 +79,6 @@ export default function KaiDocumentModal({
       : complaints.slice(0, 10).map((c) => c.id)
   );
 
-  const [docNumber, setDocNumber] = useState(() => {
-    const d = new Date();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yyyy = d.getFullYear();
-    return `FR.SM/TI/033.001/${mm}-${yyyy}`;
-  });
-
   const [docDate, setDocDate] = useState(() => {
     return new Date().toLocaleDateString("id-ID", {
       day: "numeric",
@@ -94,9 +87,7 @@ export default function KaiDocumentModal({
     });
   });
 
-  // Versi formulir standar KAI resmi ISO (format dinamis 001-YYYY)
-  const currentYear = new Date().getFullYear();
-  const [docVersion, setDocVersion] = useState(`001-${currentYear}`);
+  // R7: nomor dan versi kop bersifat paten (DOCUMENT_HEADER), bukan state.
 
   const [managementRep, setManagementRep] = useState("Ir. Bambang Triyono (MR)");
   const [isPreview, setIsPreview] = useState(currentUser.role !== Role.ADMIN);
@@ -120,14 +111,6 @@ export default function KaiDocumentModal({
       // Kembali ke mode pembuatan dokumen aktif
       setIsPublished(false);
       setArchivedSnapshot(null);
-      try {
-        const resNext = await getNextAvailableDocumentNumberAction();
-        if (resNext.success && resNext.data) {
-          setDocNumber(resNext.data);
-        }
-      } catch (err) {
-        console.error("Gagal memperbarui nomor dokumen:", err);
-      }
       return;
     }
 
@@ -136,8 +119,6 @@ export default function KaiDocumentModal({
       const res = await getPublishedDocument(archiveId);
       if (res.success && res.data) {
         const doc = res.data;
-        setDocNumber(doc.documentNumber);
-        setDocVersion(doc.version || `001-${currentYear}`);
         setManagementRep(doc.managementRep || "Management Representative KAI");
         if (doc.documentDate) {
           setDocDate(
@@ -157,7 +138,7 @@ export default function KaiDocumentModal({
           setIsPreview(true);
           setNotification({
             type: "success",
-            message: `Arsip resmi ${doc.documentNumber} (Revisi ke-${doc.revisionNumber}) berhasil dimuat dari snapshot beku. Data terkunci.`,
+            message: `Arsip resmi ${DOCUMENT_HEADER.DOCUMENT_NUMBER} (Revisi ke-${doc.revisionNumber}) berhasil dimuat dari snapshot beku. Data terkunci.`,
           });
         } else {
           // Arsip historis lama yang belum memiliki snapshot beku lengkap
@@ -166,7 +147,7 @@ export default function KaiDocumentModal({
           setIsPreview(true);
           setNotification({
             type: "error",
-            message: `Perhatian: Dokumen arsip ${doc.documentNumber} dibuat sebelum implementasi snapshot beku sehingga tidak memiliki rekaman beku.`,
+            message: `Perhatian: Dokumen arsip ${DOCUMENT_HEADER.DOCUMENT_NUMBER} dibuat sebelum implementasi snapshot beku sehingga tidak memiliki rekaman beku.`,
           });
         }
       } else {
@@ -182,17 +163,14 @@ export default function KaiDocumentModal({
         message: "Gagal memuat rincian arsip dokumen resmi.",
       });
     }
-  }, [currentYear]);
+  }, []);
 
   // Muat daftar arsip dokumen resmi jika ada di database & inisialisasi nomor dokumen unik
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
       try {
-        const [resArchives, resNextNum] = await Promise.all([
-          getPublishedDocumentsList(),
-          getNextAvailableDocumentNumberAction(),
-        ]);
+        const resArchives = await getPublishedDocumentsList();
 
         if (isMounted) {
           if (resArchives.success && resArchives.data) {
@@ -201,10 +179,6 @@ export default function KaiDocumentModal({
             if (currentUser.role !== Role.ADMIN && resArchives.data.length > 0) {
               handleSelectArchive(resArchives.data[0].id);
             }
-          }
-
-          if (resNextNum.success && resNextNum.data && currentUser.role === Role.ADMIN) {
-            setDocNumber(resNextNum.data);
           }
         }
       } catch (err) {
@@ -269,16 +243,14 @@ export default function KaiDocumentModal({
   // Generate spreadsheet according to document format
   const handleExportExcelFromModal = async () => {
     if (displayList.length === 0) return;
-    const sanitizedDocNum = docNumber.replace(/[\/\\:]/g, "-");
+    const sanitizedDocNum = DOCUMENT_HEADER.DOCUMENT_NUMBER.replace(/[\/\\:]/g, "-");
     const safePrefix = sanitizedDocNum.toLowerCase().startsWith("fr")
       ? sanitizedDocNum
       : `FR_SM_TI_033_001_${sanitizedDocNum}`;
 
     const { exportComplaintsToExcel } = await import("@/lib/exportExcel");
     exportComplaintsToExcel(displayList, {
-      documentNumber: docNumber,
       documentDate: docDate,
-      version: docVersion,
       managementRep: managementRep,
       creatorName: currentUser.name || "Administrator KAI",
       pageInfo: "1 dari 1",
@@ -309,16 +281,14 @@ export default function KaiDocumentModal({
       const blob = await pdf(
         <KaiDocumentPdf
           complaints={displayList}
-          documentNumber={docNumber}
           documentDate={docDate}
-          version={docVersion}
           managementRep={managementRep}
           creatorName={currentUser.name || "Administrator KAI"}
           logoUrl={logoUrl}
         />
       ).toBlob();
 
-      const sanitizedDocNum = docNumber.replace(/[\/\\:]/g, "-");
+      const sanitizedDocNum = DOCUMENT_HEADER.DOCUMENT_NUMBER.replace(/[\/\\:]/g, "-");
       const safePdfName = sanitizedDocNum.toLowerCase().startsWith("fr")
         ? `${sanitizedDocNum}.pdf`
         : `FR-SM-TI-033-001_${sanitizedDocNum}.pdf`;
@@ -383,8 +353,6 @@ export default function KaiDocumentModal({
     try {
       const result = await createDocumentBatch({
         complaintIds: selectedIds,
-        documentNumber: docNumber,
-        version: docVersion,
         managementRep,
         parentDocumentId: isRevisionMode && selectedArchiveId ? selectedArchiveId : undefined,
         revisionReason: isRevisionMode ? revisionReason : undefined,
@@ -392,8 +360,6 @@ export default function KaiDocumentModal({
 
       if (result.success && result.data) {
         const createdDoc = result.data;
-        setDocNumber(createdDoc.documentNumber);
-        setDocVersion(createdDoc.version || `001-${currentYear}`);
         if (createdDoc.documentDate) {
           setDocDate(
             new Date(createdDoc.documentDate).toLocaleDateString("id-ID", {
@@ -419,7 +385,7 @@ export default function KaiDocumentModal({
 
         setNotification({
           type: "success",
-          message: `Dokumen ${createdDoc.documentNumber} (Revisi ke-${createdDoc.revisionNumber}) berhasil diterbitkan resmi. Snapshot data telah terkunci.`,
+          message: `Dokumen ${DOCUMENT_HEADER.DOCUMENT_NUMBER} (Revisi ke-${createdDoc.revisionNumber}) berhasil diterbitkan resmi. Snapshot data telah terkunci.`,
         });
 
         // Muat ulang daftar arsip
@@ -582,9 +548,6 @@ export default function KaiDocumentModal({
                   <button
                     type="button"
                     onClick={() => {
-                      const parentDoc = publishedDocsList.find((d) => d.id === selectedArchiveId);
-                      const nextRevNumber = (parentDoc?.revisionNumber ?? 0) + 1;
-                      setDocVersion(`${String(nextRevNumber + 1).padStart(3, "0")}-${currentYear}`);
                       setIsRevisionMode(true);
                       setIsPublished(false);
                       setIsPreview(false);
@@ -694,7 +657,7 @@ export default function KaiDocumentModal({
                       <option value="">-- Buat Draf Dokumen Baru --</option>
                       {publishedDocsList.map((doc) => (
                         <option key={doc.id} value={doc.id}>
-                          {doc.documentNumber} {doc.revisionNumber > 0 ? `(Rev. ${doc.revisionNumber})` : ""} ({doc.totalComplaints} keluhan) -{" "}
+                          Rev. {doc.revisionNumber} ({doc.totalComplaints} keluhan) -{" "}
                           {new Date(doc.documentDate).toLocaleDateString("id-ID")}
                         </option>
                       ))}
@@ -712,7 +675,7 @@ export default function KaiDocumentModal({
                       <span>Mode Revisi Dokumen Formulir Dokumentasi</span>
                     </div>
                     <span className="text-[10px] bg-amber-200 text-amber-900 font-mono px-2 py-0.5 rounded font-bold">
-                      Induk: {docNumber}
+                      Induk: {DOCUMENT_HEADER.DOCUMENT_NUMBER}
                     </span>
                   </div>
                   <p className="text-[11px] text-amber-800">
@@ -762,13 +725,9 @@ export default function KaiDocumentModal({
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       No. Dokumen
                     </label>
-                    <input
-                      type="text"
-                      disabled={isPublished}
-                      value={docNumber}
-                      onChange={(e) => setDocNumber(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50 font-mono disabled:bg-slate-100 disabled:text-slate-500"
-                    />
+                    <div className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-600 bg-slate-100 font-mono">
+                      {DOCUMENT_HEADER.DOCUMENT_NUMBER}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -786,13 +745,9 @@ export default function KaiDocumentModal({
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Versi Dokumen
                     </label>
-                    <input
-                      type="text"
-                      disabled={isPublished}
-                      value={docVersion}
-                      onChange={(e) => setDocVersion(e.target.value)}
-                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50/50 font-mono disabled:bg-slate-100 disabled:text-slate-500"
-                    />
+                    <div className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-600 bg-slate-100 font-mono">
+                      {DOCUMENT_HEADER.VERSION}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -923,7 +878,7 @@ export default function KaiDocumentModal({
                   )}
                   {publishedDocsList.map((doc) => (
                     <option key={doc.id} value={doc.id}>
-                      {doc.documentNumber} {doc.revisionNumber > 0 ? `(Rev. ${doc.revisionNumber})` : ""} - Versi: {doc.version || "001"} ({doc.totalComplaints} keluhan)
+                      {new Date(doc.documentDate).toLocaleDateString("id-ID")} - Rev. {doc.revisionNumber} ({doc.totalComplaints} keluhan)
                     </option>
                   ))}
                 </select>
@@ -955,9 +910,7 @@ export default function KaiDocumentModal({
           >
             <KaiDocumentView
               complaints={displayList}
-              documentNumber={docNumber}
               documentDate={docDate}
-              version={docVersion}
               managementRep={managementRep}
               creatorName={currentUser.name || "Administrator KAI"}
               pageInfo="1 dari 1"
