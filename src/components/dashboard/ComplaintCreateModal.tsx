@@ -158,14 +158,14 @@ export default function ComplaintCreateModal({
                 className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
               >
                 <option value="Kantor Pusat KAI Bandung">Kantor Pusat KAI Bandung</option>
-                <option value="Daop 1 Jakarta">Daop 1 Jakarta (Gambir / Pasarsenen)</option>
+                <option value="Daop 1 Jakarta">Daop 1 Jakarta</option>
                 <option value="Daop 2 Bandung">Daop 2 Bandung</option>
                 <option value="Daop 3 Cirebon">Daop 3 Cirebon</option>
                 <option value="Daop 4 Semarang">Daop 4 Semarang</option>
                 <option value="Daop 5 Purwokerto">Daop 5 Purwokerto</option>
-                <option value="Daop 6 Yogyakarta">Daop 6 Yogyakarta (Tugu / Lempuyangan)</option>
+                <option value="Daop 6 Yogyakarta">Daop 6 Yogyakarta</option>
                 <option value="Daop 7 Madiun">Daop 7 Madiun</option>
-                <option value="Daop 8 Surabaya">Daop 8 Surabaya (Gubeng / Pasar Turi)</option>
+                <option value="Daop 8 Surabaya">Daop 8 Surabaya</option>
                 <option value="Daop 9 Jember">Daop 9 Jember</option>
                 <option value="Divre I Sumatera Utara">Divre I Sumatera Utara</option>
                 <option value="Divre II Sumatera Barat">Divre II Sumatera Barat</option>
