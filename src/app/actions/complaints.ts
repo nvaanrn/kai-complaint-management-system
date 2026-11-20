@@ -23,6 +23,7 @@ import { formatComplaintNumber, parseNextSequence } from "@/lib/complaintNumber"
 import { Permissions } from "@/lib/permissions";
 import { validateStateTransition } from "@/lib/state-machine";
 import { computeSlaSnapshot } from "@/lib/slaSnapshot";
+import { DOCUMENT_HEADER } from "@/config/documentTemplate";
 
 export interface ActionResponse<T = any> {
   success: boolean;
@@ -853,6 +854,9 @@ export async function reviewReopenRequest(
   }
 }
 
+/**
+ * @deprecated R7: nomor kop dokumen bersifat paten (DOCUMENT_HEADER.DOCUMENT_NUMBER). Tidak dipanggil lagi.
+ */
 // Helper internal: Generate nomor dokumen resmi KAI atomik dengan format FR.SM/TI/033.XXX/MM-YYYY
 // Nomor unik urut (001, 002, 003, dst) diletakkan di bagian 033.XXX, bukan di belakang tahun
 export async function generateDocumentNumber(client: any, targetDate: Date = new Date()): Promise<string> {
@@ -906,6 +910,9 @@ export async function generateDocumentNumber(client: any, targetDate: Date = new
   return `FR.SM/TI/033.${seqStr}/${mm}-${year}`;
 }
 
+/**
+ * @deprecated R7: nomor kop dokumen bersifat paten. Tidak dipanggil lagi dari UI.
+ */
 // Server Action: Dapatkan nomor dokumen berikutnya yang tersedia tanpa tabrakan
 export async function getNextAvailableDocumentNumberAction(
   targetDate?: string | Date
@@ -935,9 +942,7 @@ export async function getNextAvailableDocumentNumberAction(
 // 8. Server Action: Terbitkan Dokumen Rekapitulasi FR.SM/TI/033.001 (Khusus Admin)
 export async function createDocumentBatch(data: {
   complaintIds: string[];
-  documentNumber?: string;
   documentDate?: string | Date;
-  version?: string;
   managementRep: string;
   parentDocumentId?: string;
   revisionReason?: string;
@@ -962,7 +967,8 @@ export async function createDocumentBatch(data: {
       const docDate = data.documentDate ? new Date(data.documentDate) : new Date();
 
       // 2. Evaluasi apakah ini penerbitan dokumen baru atau revisi dokumen lama
-      let docNumber: string;
+      // R7: nomor dan versi kop paten, tidak pernah dari input client
+      const docNumber = DOCUMENT_HEADER.DOCUMENT_NUMBER;
       let revisionNumber = 0;
       let parentDocId: string | null = null;
       let revisionReasonStr: string | null = null;
@@ -987,37 +993,13 @@ export async function createDocumentBatch(data: {
           data: { status: DocumentStatus.SUPERSEDED },
         });
 
-        docNumber = parentDoc.documentNumber;
         revisionNumber = parentDoc.revisionNumber + 1;
         parentDocId = parentDoc.id;
         revisionReasonStr = data.revisionReason.trim();
-      } else {
-        // Alur Dokumen Master Pertama (revisionNumber = 0)
-        if (data.documentNumber?.trim()) {
-          docNumber = data.documentNumber.trim();
-
-          // Proteksi Integritas: Cegah penimpaan dokumen yang sudah pernah terbit
-          const existing = await tx.document.findFirst({
-            where: {
-              documentNumber: docNumber,
-              revisionNumber: 0,
-            },
-            select: { id: true },
-          });
-
-          if (existing) {
-            // Jika nomor dokumen yang dimasukkan sudah pernah terbit, otomatis alokasikan nomor urut batch berikutnya agar tidak gagal/bentrok
-            docNumber = await generateDocumentNumber(tx, docDate);
-          }
-        } else {
-          // Penomoran otomatis aman terhadap konkurensi
-          docNumber = await generateDocumentNumber(tx, docDate);
-        }
       }
 
-      // Hitung versi dinamis baku format 00X-YYYY
-      const defaultDynamicVersion = `${String(revisionNumber + 1).padStart(3, "0")}-${docDate.getFullYear()}`;
-      const versionStr = data.version?.trim() || defaultDynamicVersion;
+      // Versi kop paten dari konstanta (revisi hanya menaikkan revisionNumber)
+      const versionStr = DOCUMENT_HEADER.VERSION;
 
       // 3. Ambil data keluhan beserta verifikator dan PIC untuk dibekukan
       const complaints = await tx.complaint.findMany({
