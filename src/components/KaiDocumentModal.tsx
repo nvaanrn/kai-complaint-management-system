@@ -42,7 +42,7 @@ export default function KaiDocumentModal({
       description: s.description,
       status: s.status || "TERVERIFIKASI",
       picId: null,
-      pic: s.picName ? { id: "", name: s.picName, email: "", role: Role.PIC } : null,
+      pic: s.picName ? { id: "", name: s.picName, nipp: "", role: Role.PIC } : null,
       correctiveAction: s.correctiveAction || null,
       preventiveAction: s.preventiveAction || null,
       proofImageUrl: s.proofImageUrl || null,
@@ -56,7 +56,7 @@ export default function KaiDocumentModal({
               verifier: {
                 id: "verifier",
                 name: s.verifierName || "Verifikator Mutu",
-                email: "",
+                nipp: "",
                 role: Role.VERIFIKATOR,
               },
               result: VerificationResult.APPROVED,

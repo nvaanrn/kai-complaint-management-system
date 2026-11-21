@@ -3,6 +3,6 @@ import { Role } from "@/types/database";
 export interface AuthenticatedUser {
   id: string;
   name: string;
-  email: string;
+  nipp: string;
   role: Role;
 }

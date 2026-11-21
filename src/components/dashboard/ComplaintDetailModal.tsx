@@ -193,7 +193,7 @@ export default function ComplaintDetailModal({
                 <div className="space-y-1">
                   <p className="text-sm font-bold text-slate-900">{complaint.pic.name}</p>
                   <p className="text-xs text-slate-500">
-                    {complaint.pic.email} &bull; ({complaint.pic.role})
+                    NIPP {complaint.pic.nipp} &bull; ({complaint.pic.role})
                   </p>
                   {complaint.submittedAt && (
                     <p className="text-[11px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded inline-block font-medium">

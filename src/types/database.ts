@@ -63,7 +63,7 @@ export enum AuditAction {
 export interface UserSummary {
   id: string;
   name: string;
-  email: string;
+  nipp: string;
   role: Role;
 }
 

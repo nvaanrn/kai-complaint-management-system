@@ -19,7 +19,7 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
       preventiveAction: "Jadwal pengecekan suhu kabin diperketat sebelum rangkaian diberangkatkan",
       notes: "Selesai ditangani tepat waktu",
       picId: "pic-1",
-      pic: { id: "pic-1", name: "Ahmad Teknisi", email: "ahmad@kai.id", role: Role.PIC },
+      pic: { id: "pic-1", name: "Ahmad Teknisi", nipp: "99000001", role: Role.PIC },
       verifications: [
         {
           id: "v-1",
@@ -48,7 +48,7 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
       preventiveAction: "Pemeriksaan rel pintu masuk checklist harian",
       notes: "Keluhan ditutup",
       picId: "pic-2",
-      pic: { id: "pic-2", name: "Bayu Mekanik", email: "bayu@kai.id", role: Role.PIC },
+      pic: { id: "pic-2", name: "Bayu Mekanik", nipp: "99000001", role: Role.PIC },
       verifications: [
         {
           id: "v-2",
@@ -203,21 +203,21 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
     const adminUser = {
       id: "admin-1",
       name: "Admin KAI",
-      email: "admin@kai.id",
+      nipp: "99000001",
       role: Role.ADMIN,
     };
 
     const picUser = {
       id: "pic-1",
       name: "Petugas PIC",
-      email: "pic@kai.id",
+      nipp: "99000001",
       role: Role.PIC,
     };
 
     const verifikatorUser = {
       id: "verif-1",
       name: "Verifikator Mutu",
-      email: "verif@kai.id",
+      nipp: "99000001",
       role: Role.VERIFIKATOR,
     };
 
@@ -450,9 +450,9 @@ describe("KAI Document Print and PDF Parity & Integrity Tests", () => {
     });
 
     it("7. Hak akses penerbitan tetap benar (Hanya Admin)", () => {
-      const admin = { id: "a1", name: "Admin", email: "a@kai.id", role: Role.ADMIN };
-      const pic = { id: "p1", name: "PIC", email: "p@kai.id", role: Role.PIC };
-      const verif = { id: "v1", name: "Verif", email: "v@kai.id", role: Role.VERIFIKATOR };
+      const admin = { id: "a1", name: "Admin", nipp: "99000001", role: Role.ADMIN };
+      const pic = { id: "p1", name: "PIC", nipp: "99000001", role: Role.PIC };
+      const verif = { id: "v1", name: "Verif", nipp: "99000001", role: Role.VERIFIKATOR };
 
       expect(Permissions.canGenerateDocument(admin)).toBe(true);
       expect(Permissions.canGenerateDocument(pic)).toBe(false);

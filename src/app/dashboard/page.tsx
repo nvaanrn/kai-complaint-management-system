@@ -23,7 +23,7 @@ export default async function DashboardPage() {
       orderBy: { createdAt: "desc" },
       include: {
         pic: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { id: true, name: true, nipp: true, role: true },
         },
         verifications: {
           orderBy: { verifiedAt: "desc" },
@@ -37,10 +37,10 @@ export default async function DashboardPage() {
           orderBy: { requestedAt: "desc" },
           include: {
             requester: {
-              select: { id: true, name: true, email: true, role: true },
+              select: { id: true, name: true, nipp: true, role: true },
             },
             reviewer: {
-              select: { id: true, name: true, email: true, role: true },
+              select: { id: true, name: true, nipp: true, role: true },
             },
           },
         },
@@ -53,7 +53,7 @@ export default async function DashboardPage() {
     const usersData = await prisma.user.findMany({
       where: { role: Role.PIC },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true, role: true },
+      select: { id: true, name: true, nipp: true, role: true },
     });
 
     rawPicList = usersData as unknown as UserSummary[];
@@ -99,7 +99,7 @@ export default async function DashboardPage() {
   const currentUser = {
     id: user.id,
     name: user.name,
-    email: user.email,
+    nipp: user.nipp,
     role: user.role,
   };
 

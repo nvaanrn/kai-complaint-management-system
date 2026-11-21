@@ -1,49 +1,51 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
+import { prisma } from "@/lib/prisma";
 import { Role } from "@/types/database";
 
 export interface AuthenticatedUser {
   id: string;
   name: string;
-  email: string;
+  nipp: string;
   role: Role;
 }
 
 /**
  * Mendapatkan data pengguna yang sedang login berdasarkan sesi NextAuth (JWT).
  *
- * Standar NextAuth v4:
- * - Menggunakan getServerSession() di sisi server (bukan useSession) untuk akses SSR.
- * - Role diambil dari JWT token yang di-set saat authorize() di Credentials Provider.
- * - Jika role tidak valid, return null untuk mencegah akses tanpa role.
+ * Setiap pemanggilan memeriksa tabel User: akun yang dinonaktifkan langsung kehilangan akses
+ * walau token JWT-nya belum kedaluwarsa, dan role selalu diambil dari database (bukan dari token).
  */
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
   try {
     const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
 
-    if (!session?.user?.email) {
+    if (!userId) {
       return null;
     }
 
-    const role = (session.user as any).role as Role | undefined;
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, nipp: true, role: true, isActive: true },
+    });
 
-    // Tolak akses jika role tidak terdefinisi atau tidak valid
+    if (!dbUser || !dbUser.isActive) {
+      return null;
+    }
+
+    // Tolak akses jika role tidak valid
+    const role = dbUser.role as Role;
     const validRoles: Role[] = [Role.ADMIN, Role.PIC, Role.VERIFIKATOR];
-    if (!role || !validRoles.includes(role)) {
-      console.warn(
-        `[Auth] User ${session.user.email} tidak memiliki role yang valid di session JWT.`
-      );
+    if (!validRoles.includes(role)) {
+      console.warn(`[Auth] User NIPP ${dbUser.nipp} tidak memiliki role yang valid.`);
       return null;
     }
-
-    const name =
-      session.user.name ??
-      session.user.email.split("@")[0];
 
     return {
-      id: (session.user as any).id as string,
-      name,
-      email: session.user.email,
+      id: dbUser.id,
+      name: dbUser.name,
+      nipp: dbUser.nipp,
       role,
     };
   } catch (error: any) {

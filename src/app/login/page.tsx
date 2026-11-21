@@ -4,28 +4,35 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Image from "next/image";
+import { isValidNipp, NIPP_MIN_LENGTH, NIPP_MAX_LENGTH } from "@/config/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [nipp, setNipp] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setErrorMsg("");
+
+    if (!isValidNipp(nipp.trim())) {
+      setErrorMsg(`NIPP harus berupa angka (${NIPP_MIN_LENGTH}-${NIPP_MAX_LENGTH} digit).`);
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const result = await signIn("credentials", {
-        email: email.trim(),
+        nipp: nipp.trim(),
         password: password.trim(),
         redirect: false,
       });
 
       if (result?.error) {
-        setErrorMsg("Email atau kata sandi tidak sesuai. Silakan periksa kembali.");
+        setErrorMsg("NIPP atau kata sandi tidak sesuai. Silakan periksa kembali.");
       } else {
         // Gunakan hard redirect agar session cookie dan middleware tersinkronisasi seketika
         window.location.href = "/dashboard";
@@ -37,8 +44,8 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickFill = (roleEmail: string) => {
-    setEmail(roleEmail);
+  const handleQuickFill = (roleNipp: string) => {
+    setNipp(roleNipp);
     setPassword("password123");
   };
 
@@ -82,14 +89,17 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Email Staf KAI
+              NIPP
             </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              inputMode="numeric"
+              autoComplete="username"
+              value={nipp}
+              onChange={(e) => setNipp(e.target.value.replace(/\D/g, ""))}
               required
-              placeholder="nama@spkp.kai.id"
+              maxLength={NIPP_MAX_LENGTH}
+              placeholder="Masukkan NIPP"
               className="w-full px-4 py-2.5 text-sm bg-slate-50/70 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white transition"
             />
           </div>
@@ -127,21 +137,21 @@ export default function LoginPage() {
           <div className="grid grid-cols-3 gap-1.5 text-center">
             <button
               type="button"
-              onClick={() => handleQuickFill("admin@spkp.kai.id")}
+              onClick={() => handleQuickFill("9987459001")}
               className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100 transition cursor-pointer"
             >
               Admin
             </button>
             <button
               type="button"
-              onClick={() => handleQuickFill("pic@spkp.kai.id")}
+              onClick={() => handleQuickFill("9987459002")}
               className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-100 transition cursor-pointer"
             >
               PIC Teknis
             </button>
             <button
               type="button"
-              onClick={() => handleQuickFill("verifikator@spkp.kai.id")}
+              onClick={() => handleQuickFill("9987459003")}
               className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100 transition cursor-pointer"
             >
               Verifikator

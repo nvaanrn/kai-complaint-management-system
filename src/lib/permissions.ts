@@ -2,7 +2,7 @@ import { Role, ComplaintStatus } from "@/types/database";
 
 export interface UserSession {
   id: string;
-  email: string;
+  nipp: string;
   name: string;
   role: Role;
 }

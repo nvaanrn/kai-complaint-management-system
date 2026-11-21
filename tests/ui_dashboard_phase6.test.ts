@@ -5,7 +5,7 @@ describe("Phase 6 UI/UX & Dashboard Logic Tests", () => {
   const mockPicUser = {
     id: "user-pic-1",
     name: "Petugas Lapangan PIC",
-    email: "pic1@spkp.kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 

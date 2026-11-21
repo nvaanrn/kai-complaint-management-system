@@ -93,10 +93,7 @@ export default function DashboardClient({
   // Helper check if complaint is assigned to current user
   const isAssignedToCurrentUser = (item: ComplaintData) => {
     if (!item.pic) return false;
-    return (
-      item.pic.id === currentUser.id ||
-      item.pic.email.toLowerCase() === currentUser.email.toLowerCase()
-    );
+    return item.pic.id === currentUser.id;
   };
 
   // -------------------------------------------------------------

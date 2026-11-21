@@ -22,7 +22,7 @@ export default function PicOverview({
 }: PicOverviewProps) {
   // Filter keluhan yang ditugaskan ke PIC saat ini
   const myComplaints = complaints.filter(
-    (c) => c.pic && (c.pic.id === currentUser.id || c.pic.email === currentUser.email)
+    (c) => c.pic && c.pic.id === currentUser.id
   );
 
   const myActiveTasks = myComplaints.filter(

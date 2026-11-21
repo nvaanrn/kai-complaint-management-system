@@ -22,28 +22,28 @@ describe("FASE 7 — Pengujian Integrasi, Keamanan, dan Arsip Dokumen SPKP", () 
   const adminUser: UserSession = {
     id: "user-admin-01",
     name: "Admin Pengendali Mutu",
-    email: "admin@spkp.kai.id",
+    nipp: "99000001",
     role: Role.ADMIN,
   };
 
   const picUser1: UserSession = {
     id: "user-pic-01",
     name: "Petugas PIC Lapangan 1",
-    email: "pic1@spkp.kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const picUser2: UserSession = {
     id: "user-pic-02",
     name: "Petugas PIC Lapangan 2",
-    email: "pic2@spkp.kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const verifikatorUser: UserSession = {
     id: "user-veri-01",
     name: "Verifikator Mutu Layanan",
-    email: "verifikator@spkp.kai.id",
+    nipp: "99000001",
     role: Role.VERIFIKATOR,
   };
 

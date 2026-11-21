@@ -10,26 +10,26 @@ async function main() {
 
   // 1. Buat User Admin
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@spkp.kai.id' },
+    where: { nipp: '9987459001' },
     update: {},
-    create: { name: 'Administrator SPKP', email: 'admin@spkp.kai.id', password: defaultPassword, role: Role.ADMIN },
+    create: { nipp: '9987459001', name: 'Administrator SPKP', password: defaultPassword, role: Role.ADMIN },
   });
 
   // 2. Buat User PIC
   const pic = await prisma.user.upsert({
-    where: { email: 'pic@spkp.kai.id' },
+    where: { nipp: '9987459002' },
     update: {},
-    create: { name: 'Budi Santoso (PIC Operasional)', email: 'pic@spkp.kai.id', password: defaultPassword, role: Role.PIC },
+    create: { nipp: '9987459002', name: 'Budi Santoso (PIC Operasional)', password: defaultPassword, role: Role.PIC },
   });
 
   // 3. Buat User Verifikator
   const verifier = await prisma.user.upsert({
-    where: { email: 'verifikator@spkp.kai.id' },
+    where: { nipp: '9987459003' },
     update: {},
-    create: { name: 'Siti Rahma (Tim Verifikasi)', email: 'verifikator@spkp.kai.id', password: defaultPassword, role: Role.VERIFIKATOR },
+    create: { nipp: '9987459003', name: 'Siti Rahma (Tim Verifikasi)', password: defaultPassword, role: Role.VERIFIKATOR },
   });
 
-  console.log('✅ Users ter‑seed', { admin: admin.email, pic: pic.email, verifier: verifier.email });
+  console.log('✅ Users ter‑seed', { admin: admin.nipp, pic: pic.nipp, verifier: verifier.nipp });
 
   // 4. Seed master category (default)
   const defaultCategory = await prisma.complaintCategoryMaster.upsert({

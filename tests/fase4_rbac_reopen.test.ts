@@ -21,35 +21,35 @@ describe("FASE 4 — Penguatan Hak Akses PIC dan Persetujuan Reopen", () => {
   const adminA: UserSession = {
     id: "admin-a",
     name: "Admin A",
-    email: "admina@spkp.kai.id",
+    nipp: "99000001",
     role: Role.ADMIN,
   };
 
   const adminB: UserSession = {
     id: "admin-b",
     name: "Admin B",
-    email: "adminb@spkp.kai.id",
+    nipp: "99000001",
     role: Role.ADMIN,
   };
 
   const picUser1: UserSession = {
     id: "pic-1",
     name: "Budi Santoso",
-    email: "pic1@spkp.kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const picUser2: UserSession = {
     id: "pic-2",
     name: "Sinta Wijaya",
-    email: "pic2@spkp.kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const verifikator: UserSession = {
     id: "veri-1",
     name: "Siti Rahma",
-    email: "verifikator@spkp.kai.id",
+    nipp: "99000001",
     role: Role.VERIFIKATOR,
   };
 

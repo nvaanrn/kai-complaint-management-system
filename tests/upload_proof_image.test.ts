@@ -30,7 +30,7 @@ describe("API Route: /api/upload (Proof Image Upload Hardening)", () => {
     vi.spyOn(authModule, "getCurrentUser").mockResolvedValue({
       id: "u-verif",
       name: "Verifikator",
-      email: "verifikator@kai.id",
+      nipp: "99000001",
       role: Role.VERIFIKATOR,
     });
 
@@ -48,7 +48,7 @@ describe("API Route: /api/upload (Proof Image Upload Hardening)", () => {
     vi.spyOn(authModule, "getCurrentUser").mockResolvedValue({
       id: "u-pic",
       name: "PIC Lapangan",
-      email: "pic@kai.id",
+      nipp: "99000001",
       role: Role.PIC,
     });
 
@@ -68,7 +68,7 @@ describe("API Route: /api/upload (Proof Image Upload Hardening)", () => {
     vi.spyOn(authModule, "getCurrentUser").mockResolvedValue({
       id: "u-pic",
       name: "PIC Lapangan",
-      email: "pic@kai.id",
+      nipp: "99000001",
       role: Role.PIC,
     });
 
@@ -91,7 +91,7 @@ describe("API Route: /api/upload (Proof Image Upload Hardening)", () => {
     vi.spyOn(authModule, "getCurrentUser").mockResolvedValue({
       id: "u-pic",
       name: "PIC Lapangan",
-      email: "pic@kai.id",
+      nipp: "99000001",
       role: Role.PIC,
     });
 
@@ -115,7 +115,7 @@ describe("API Route: /api/upload (Proof Image Upload Hardening)", () => {
     vi.spyOn(authModule, "getCurrentUser").mockResolvedValue({
       id: "u-pic",
       name: "PIC Lapangan",
-      email: "pic@kai.id",
+      nipp: "99000001",
       role: Role.PIC,
     });
 

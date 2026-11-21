@@ -12,28 +12,28 @@ describe("Unit & Integration Test: State Machine & Backend RBAC (Fase 4)", () =>
   const adminUser: UserSession = {
     id: "admin-1",
     name: "Admin CS KAI",
-    email: "admin@spkp.kai.id",
+    nipp: "99000001",
     role: Role.ADMIN,
   };
 
   const picUser1: UserSession = {
     id: "pic-1",
     name: "Budi Santoso",
-    email: "pic1@spkp.kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const picUser2: UserSession = {
     id: "pic-2",
     name: "Joko Anwar",
-    email: "pic2@spkp.kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const verifikatorUser: UserSession = {
     id: "veri-1",
     name: "Siti Rahma",
-    email: "verifikator@spkp.kai.id",
+    nipp: "99000001",
     role: Role.VERIFIKATOR,
   };
 

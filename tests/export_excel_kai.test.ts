@@ -20,7 +20,7 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
       preventiveAction: null,
       notes: "Sudah diajukan ke tim verifikator.",
       picId: "pic-1",
-      pic: { id: "pic-1", name: "Budi Santoso", email: "budi@kai.id", role: Role.PIC },
+      pic: { id: "pic-1", name: "Budi Santoso", nipp: "99000001", role: Role.PIC },
       verifications: [
         {
           id: "v-001",
@@ -50,7 +50,7 @@ describe("Revisi Ekspor Excel SPKP Sesuai Referensi Visual PDF Dokumen Resmi KAI
       preventiveAction: "ndfkjnkid",
       notes: null,
       picId: "pic-2",
-      pic: { id: "pic-2", name: "Budi Santoso", email: "budi@kai.id", role: Role.PIC },
+      pic: { id: "pic-2", name: "Budi Santoso", nipp: "99000001", role: Role.PIC },
       verifications: [
         {
           id: "v-002",

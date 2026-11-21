@@ -6,28 +6,28 @@ describe("Unit Test: Role-Based Access Control (RBAC Permissions)", () => {
   const adminUser: UserSession = {
     id: "user-admin-1",
     name: "Admin CS KAI",
-    email: "admin@kai.id",
+    nipp: "99000001",
     role: Role.ADMIN,
   };
 
   const picUser1: UserSession = {
     id: "user-pic-1",
     name: "Petugas Lapangan 1",
-    email: "pic1@kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const picUser2: UserSession = {
     id: "user-pic-2",
     name: "Petugas Lapangan 2",
-    email: "pic2@kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const verifikatorUser: UserSession = {
     id: "user-veri-1",
     name: "Verifikator Mutu",
-    email: "verifikator@kai.id",
+    nipp: "99000001",
     role: Role.VERIFIKATOR,
   };
 

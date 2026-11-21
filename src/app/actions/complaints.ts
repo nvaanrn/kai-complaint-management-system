@@ -1005,7 +1005,7 @@ export async function createDocumentBatch(data: {
       const complaints = await tx.complaint.findMany({
         where: { id: { in: data.complaintIds } },
         include: {
-          pic: { select: { name: true, email: true } },
+          pic: { select: { name: true, nipp: true } },
           verifications: {
             orderBy: { verifiedAt: "desc" },
             take: 1,
@@ -1123,7 +1123,7 @@ export async function getPublishedDocument(identifier: string): Promise<ActionRe
       orderBy: { revisionNumber: "desc" },
       include: {
         createdBy: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { id: true, name: true, nipp: true, role: true },
         },
         parentDocument: {
           select: { id: true, documentNumber: true, revisionNumber: true, version: true },
@@ -1161,7 +1161,7 @@ export async function getPublishedDocumentsList(): Promise<ActionResponse> {
       orderBy: { createdAt: "desc" },
       include: {
         createdBy: {
-          select: { id: true, name: true, email: true, role: true },
+          select: { id: true, name: true, nipp: true, role: true },
         },
       },
     });

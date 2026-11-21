@@ -6,28 +6,28 @@ describe("Audit & Pengujian: Menu Verifikasi & Penguncian Data Terverifikasi", (
   const adminUser: UserSession = {
     id: "admin-1",
     name: "Admin Pusat KAI",
-    email: "admin@kai.id",
+    nipp: "99000001",
     role: Role.ADMIN,
   };
 
   const verifikatorUser: UserSession = {
     id: "verif-1",
     name: "Petugas Verifikator",
-    email: "verifikator@kai.id",
+    nipp: "99000001",
     role: Role.VERIFIKATOR,
   };
 
   const picUser1: UserSession = {
     id: "pic-1",
     name: "PIC Stasiun Gambir",
-    email: "pic1@kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
   const picUser2: UserSession = {
     id: "pic-2",
     name: "PIC Stasiun Senen",
-    email: "pic2@kai.id",
+    nipp: "99000001",
     role: Role.PIC,
   };
 
