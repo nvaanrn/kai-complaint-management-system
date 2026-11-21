@@ -125,7 +125,7 @@ export default function LoginPage() {
             disabled={isLoading}
             className="w-full bg-blue-900 hover:bg-blue-800 active:scale-98 text-white font-semibold py-3 rounded-xl transition duration-150 text-sm shadow-sm disabled:opacity-50 cursor-pointer mt-2"
           >
-            {isLoading ? "Memverifikasi Kredensial..." : "Masuk ke Sistem SPKP"}
+            {isLoading ? "Memverifikasi..." : "Masuk ke Sistem SPKP"}
           </button>
         </form>
 
