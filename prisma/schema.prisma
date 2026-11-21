@@ -80,7 +80,6 @@ model User {
   id                String              @id @default(uuid())
   nipp              String              @unique
   name              String
-  email             String?             @unique // DEPRECATED: login memakai NIPP, kolom ini dihapus di Tahap B
   password          String
   role              Role                @default(PIC)
   isActive          Boolean             @default(true)
