@@ -78,3 +78,5 @@ public/uploads/*
 # Temporary / Scratch
 # ==============================
 scratch/
+
+*.zip
