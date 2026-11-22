@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { ComplaintData, UserSummary, Role, VerificationResult } from "@/types/database";
-import { VALID_SOURCES, normalizeComplaintSource } from "@/lib/validation";
+import { MasterDataLists, EMPTY_MASTER_DATA, buildSelectOptions } from "@/lib/masterDataRules";
 
 interface ComplaintActionModalProps {
   complaint: ComplaintData;
   currentUser: UserSummary;
   picList: UserSummary[];
+  masterData?: MasterDataLists;
   onClose: () => void;
   onSaveAdminDetails: (data: {
     customerName: string;
@@ -37,6 +38,7 @@ export default function ComplaintActionModal({
   complaint,
   currentUser,
   picList,
+  masterData = EMPTY_MASTER_DATA,
   onClose,
   onSaveAdminDetails,
   onUpdatePicProgress,
@@ -71,10 +73,11 @@ export default function ComplaintActionModal({
   // State: Admin Fields
   const [adminCustomerName, setAdminCustomerName] = useState(complaint.customerName);
   const [adminCustomerContact, setAdminCustomerContact] = useState(complaint.customerContact || "");
-  const [adminDaopOrStation, setAdminDaopOrStation] = useState(complaint.daopOrStation || "Kantor Pusat KAI Bandung");
-  const [adminSource, setAdminSource] = useState<string>(
-    normalizeComplaintSource(complaint.source)
-  );
+  const [adminDaopOrStation, setAdminDaopOrStation] = useState(complaint.daopOrStation || "");
+  const [adminSource, setAdminSource] = useState<string>(complaint.source || "");
+  // Opsi: master aktif + nilai yang sedang dipakai keluhan ini (walau sudah nonaktif)
+  const areaOptions = buildSelectOptions(masterData.areas, complaint.daopOrStation);
+  const sourceOptions = buildSelectOptions(masterData.sources, complaint.source);
   const [adminDate, setAdminDate] = useState(
     complaint.date ? new Date(complaint.date).toISOString().split("T")[0] : ""
   );
@@ -135,6 +138,14 @@ export default function ComplaintActionModal({
     }
     if (adminDescription.trim().length < 10) {
       setUploadError("Uraian keluhan minimal 10 karakter.");
+      return;
+    }
+    if (!adminDaopOrStation) {
+      setUploadError("Wilayah operasional wajib dipilih.");
+      return;
+    }
+    if (!adminSource) {
+      setUploadError("Sumber keluhan wajib dipilih.");
       return;
     }
     setUploadError("");
@@ -346,42 +357,35 @@ export default function ComplaintActionModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Wilayah Operasional / Daop
+                    Wilayah Operasional / Daop <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={adminDaopOrStation}
                     onChange={(e) => setAdminDaopOrStation(e.target.value)}
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    <option value="Kantor Pusat KAI Bandung">Kantor Pusat KAI Bandung</option>
-                    <option value="Daop 1 Jakarta">Daop 1 Jakarta (Gambir / Pasarsenen)</option>
-                    <option value="Daop 2 Bandung">Daop 2 Bandung</option>
-                    <option value="Daop 3 Cirebon">Daop 3 Cirebon</option>
-                    <option value="Daop 4 Semarang">Daop 4 Semarang</option>
-                    <option value="Daop 5 Purwokerto">Daop 5 Purwokerto</option>
-                    <option value="Daop 6 Yogyakarta">Daop 6 Yogyakarta (Tugu / Lempuyangan)</option>
-                    <option value="Daop 7 Madiun">Daop 7 Madiun</option>
-                    <option value="Daop 8 Surabaya">Daop 8 Surabaya (Gubeng / Pasar Turi)</option>
-                    <option value="Daop 9 Jember">Daop 9 Jember</option>
-                    <option value="Divre I Sumatera Utara">Divre I Sumatera Utara</option>
-                    <option value="Divre II Sumatera Barat">Divre II Sumatera Barat</option>
-                    <option value="Divre III Palembang">Divre III Palembang</option>
-                    <option value="Divre IV Tanjungkarang">Divre IV Tanjungkarang</option>
-                    <option value="Lainnya">Lainnya / Luar Wilayah</option>
+                    <option value="">-- Pilih wilayah operasional --</option>
+                    {areaOptions.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Sumber Keluhan
+                    Sumber Keluhan <span className="text-rose-500">*</span>
                   </label>
                   <select
                     value={adminSource}
                     onChange={(e) => setAdminSource(e.target.value)}
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
-                    {VALID_SOURCES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
+                    {sourceOptions.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
                     ))}
                   </select>
                 </div>

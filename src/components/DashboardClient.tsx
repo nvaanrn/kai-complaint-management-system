@@ -151,7 +151,7 @@ export default function DashboardClient({
     date: string;
     picId?: string;
     description: string;
-    category?: string;
+    categoryId?: string;
   }) => {
     try {
       setCreateLoading(true);
@@ -163,7 +163,7 @@ export default function DashboardClient({
         date: data.date,
         picId: data.picId,
         description: data.description,
-        category: data.category,
+        categoryId: data.categoryId,
       });
 
       if (!res.success) {
@@ -561,6 +561,7 @@ export default function DashboardClient({
       {isCreateModalOpen && currentUser.role === Role.ADMIN && (
         <ComplaintCreateModal
           picList={picList}
+          masterData={masterData}
           onClose={() => setIsCreateModalOpen(false)}
           onSubmit={handleCreateSubmit}
           isLoading={createLoading || isPending}
@@ -573,6 +574,7 @@ export default function DashboardClient({
           complaint={selectedComplaint}
           currentUser={currentUser}
           picList={picList}
+          masterData={masterData}
           onClose={() => setSelectedComplaint(null)}
           onSaveAdminDetails={handleSaveAdminDetails}
           onUpdatePicProgress={handleUpdatePicProgress}

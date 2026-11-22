@@ -6,6 +6,15 @@ import {
 } from "@/lib/validation";
 
 describe("Unit Test: Form Validation (validateComplaintInput)", () => {
+  it("validator murni hanya memastikan sumber terisi; keanggotaannya diperiksa terhadap master di server", () => {
+    const res = validateComplaintInput({
+      customerName: "Budi Santoso",
+      description: "AC di gerbong 3 mati total",
+      source: "Sumber Baru Buatan Admin",
+    });
+    expect(res.isValid).toBe(true);
+  });
+
   it("harus menolak input jika nama pelapor kosong atau hanya whitespace", () => {
     const res1 = validateComplaintInput({
       customerName: "",

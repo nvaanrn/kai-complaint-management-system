@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { UserSummary, Role } from "@/types/database";
-import { VALID_SOURCES, VALID_CATEGORIES } from "@/lib/validation";
+import { MasterDataLists, buildSelectOptions, selectableCategories } from "@/lib/masterDataRules";
 
 interface ComplaintCreateModalProps {
   picList: UserSummary[];
+  masterData: MasterDataLists;
   onClose: () => void;
   onSubmit: (data: {
     customerName: string;
@@ -16,7 +17,7 @@ interface ComplaintCreateModalProps {
     date: string;
     picId?: string;
     description: string;
-    category?: string;
+    categoryId?: string;
   }) => Promise<void>;
   isLoading: boolean;
 }
@@ -24,6 +25,7 @@ interface ComplaintCreateModalProps {
 
 export default function ComplaintCreateModal({
   picList,
+  masterData,
   onClose,
   onSubmit,
   isLoading,
@@ -39,12 +41,18 @@ export default function ComplaintCreateModal({
 
   const [customerName, setCustomerName] = useState("");
   const [customerContact, setCustomerContact] = useState("");
-  const [daopOrStation, setDaopOrStation] = useState("Daop 1 Jakarta");
-  const [source, setSource] = useState<string>(VALID_SOURCES[0]);
+  // Pilihan dropdown berasal dari data master yang aktif (diatur Admin di Setting & Master Data)
+  const areaOptions = buildSelectOptions(masterData.areas);
+  const sourceOptions = buildSelectOptions(masterData.sources);
+  const activeCategories = selectableCategories(masterData.categories);
+
+  const [daopOrStation, setDaopOrStation] = useState<string>("");
+  const [source, setSource] = useState<string>("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [picId, setPicId] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<string>("");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const selectedCategory = activeCategories.find((cat) => cat.id === categoryId);
   const [formError, setFormError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,6 +66,19 @@ export default function ComplaintCreateModal({
       return;
     }
 
+    if (!daopOrStation) {
+      setFormError("Wilayah operasional wajib dipilih.");
+      return;
+    }
+    if (!categoryId) {
+      setFormError("Kategori keluhan wajib dipilih.");
+      return;
+    }
+    if (!source) {
+      setFormError("Sumber keluhan wajib dipilih.");
+      return;
+    }
+
     setFormError("");
     await onSubmit({
       customerName: customerName.trim(),
@@ -67,7 +88,7 @@ export default function ComplaintCreateModal({
       date,
       picId: picId || undefined,
       description: description.trim(),
-      category: category || undefined,
+      categoryId: categoryId || undefined,
     });
   };
 
@@ -147,64 +168,67 @@ export default function ComplaintCreateModal({
               />
             </div>
 
-            {/* Wilayah / Daop */}
+            {/* Wilayah / Daop (dari data master) */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Wilayah Operasional / Daop
+                Wilayah Operasional / Daop <span className="text-rose-500">*</span>
               </label>
               <select
+                required
                 value={daopOrStation}
                 onChange={(e) => setDaopOrStation(e.target.value)}
                 className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
               >
-                <option value="Kantor Pusat KAI Bandung">Kantor Pusat KAI Bandung</option>
-                <option value="Daop 1 Jakarta">Daop 1 Jakarta</option>
-                <option value="Daop 2 Bandung">Daop 2 Bandung</option>
-                <option value="Daop 3 Cirebon">Daop 3 Cirebon</option>
-                <option value="Daop 4 Semarang">Daop 4 Semarang</option>
-                <option value="Daop 5 Purwokerto">Daop 5 Purwokerto</option>
-                <option value="Daop 6 Yogyakarta">Daop 6 Yogyakarta</option>
-                <option value="Daop 7 Madiun">Daop 7 Madiun</option>
-                <option value="Daop 8 Surabaya">Daop 8 Surabaya</option>
-                <option value="Daop 9 Jember">Daop 9 Jember</option>
-                <option value="Divre I Sumatera Utara">Divre I Sumatera Utara</option>
-                <option value="Divre II Sumatera Barat">Divre II Sumatera Barat</option>
-                <option value="Divre III Palembang">Divre III Palembang</option>
-                <option value="Divre IV Tanjungkarang">Divre IV Tanjungkarang</option>
-                <option value="Lainnya">Lainnya / Luar Wilayah</option>
+                <option value="">-- Pilih wilayah operasional --</option>
+                {areaOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* Kategori Keluhan */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Kategori Keluhan
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
-            >
-              <option value="">-- Pilih Kategori (opsional) --</option>
-              {VALID_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-          </div>
-          {/* Sumber Keluhan */}
+            {/* Kategori Keluhan (dari data master) */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Sumber / Saluran Keluhan
+                Kategori Keluhan <span className="text-rose-500">*</span>
               </label>
               <select
+                required
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
+              >
+                <option value="">-- Pilih kategori keluhan --</option>
+                {activeCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+              {selectedCategory && (
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Target SLA kategori ini: {selectedCategory.slaHours} jam kerja.
+                </p>
+              )}
+            </div>
+
+            {/* Sumber Keluhan (dari data master) */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Sumber / Saluran Keluhan <span className="text-rose-500">*</span>
+              </label>
+              <select
+                required
                 value={source}
                 onChange={(e) => setSource(e.target.value)}
                 className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 text-slate-900 bg-white"
               >
-                {VALID_SOURCES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                <option value="">-- Pilih sumber keluhan --</option>
+                {sourceOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -290,7 +314,7 @@ export default function ComplaintCreateModal({
               </button>
               <button
                 type="submit"
-                disabled={isLoading || !description.trim() || !customerName.trim()}
+                disabled={isLoading || !description.trim() || !customerName.trim() || !source || !daopOrStation || !categoryId}
                 className="px-5 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-md disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
               >
                 {isLoading ? "Menyimpan Data..." : "Simpan Keluhan"}

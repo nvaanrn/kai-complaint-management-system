@@ -123,3 +123,39 @@ export function toMasterItem(row: {
   if (row.description !== undefined) item.description = row.description;
   return item;
 }
+
+// Opsi dropdown: hanya data aktif, ditambah nilai yang sedang dipakai keluhan (walau sudah nonaktif
+// atau tidak ada di master) agar nilai itu tidak hilang saat keluhan lama dibuka.
+export function buildSelectOptions(items: MasterItem[], currentValue?: string | null): string[] {
+  const names = items.filter((i) => i.isActive).map((i) => i.name);
+  const current = currentValue?.trim();
+  if (current && !names.includes(current)) {
+    names.push(current);
+  }
+  return names;
+}
+
+// Kategori keluhan lama (enum ComplaintCategory) dipertahankan sebagai data master.
+// Target SLA awal 24 jam hanyalah nilai sementara; Admin mengubahnya per kategori di Master Data.
+export const LEGACY_CATEGORIES: ReadonlyArray<{ code: string; name: string; description: string }> = [
+  { code: "KESELAMATAN_KEAMANAN", name: "Keselamatan dan Keamanan", description: "Keamanan, barang tertinggal, pelecehan" },
+  { code: "FASILITAS_KERETA", name: "Fasilitas Kereta", description: "AC, toilet, stopkontak, kebersihan kereta" },
+  { code: "FASILITAS_STASIUN", name: "Fasilitas Stasiun", description: "Eskalator, peron, ruang tunggu stasiun" },
+  { code: "TIKET_DAN_SISTEM", name: "Tiket dan Sistem", description: "Access by KAI, e-boarding pass, loket" },
+  { code: "PELAYANAN_PETUGAS", name: "Pelayanan Petugas", description: "Sikap dan keramahan kondektur, prama/prami, petugas" },
+  { code: "REFUND_DAN_TARIF", name: "Refund dan Tarif", description: "Restitusi pembatalan tiket, selisih bea" },
+  { code: "INFORMASI_DAN_LAINNYA", name: "Informasi dan Lainnya", description: "Pertanyaan jadwal, keluhan umum" },
+];
+
+// Kolom enum lama pada keluhan tetap diisi untuk kategori bawaan di atas (kompatibel dengan arsip dan ekspor).
+export function legacyCategoryFromName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const key = normalizeMasterName(name).toLowerCase();
+  const found = LEGACY_CATEGORIES.find((c) => c.name.toLowerCase() === key);
+  return found ? found.code : null;
+}
+
+// Kategori yang boleh dipilih pada keluhan baru: aktif dan bukan kategori cadangan sistem.
+export function selectableCategories(items: MasterItem[]): MasterItem[] {
+  return items.filter((i) => i.isActive && !isProtectedMasterItem("category", i.name));
+}

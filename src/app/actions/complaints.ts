@@ -23,6 +23,8 @@ import { formatComplaintNumber, parseNextSequence } from "@/lib/complaintNumber"
 import { Permissions } from "@/lib/permissions";
 import { validateStateTransition } from "@/lib/state-machine";
 import { computeSlaSnapshot } from "@/lib/slaSnapshot";
+import { findMasterByName, findCategoryForNewComplaint } from "@/lib/masterLookup";
+import { legacyCategoryFromName } from "@/lib/masterDataRules";
 import { DOCUMENT_HEADER } from "@/config/documentTemplate";
 
 export interface ActionResponse<T = any> {
@@ -118,6 +120,7 @@ export async function createComplaint(formData: {
   daopOrStation?: string;
   source: string;
   category?: string;
+  categoryId?: string;
   description: string;
   date?: string;
   picId?: string | null;
@@ -143,6 +146,15 @@ export async function createComplaint(formData: {
   if (!validation.isValid) {
     return { success: false, error: validation.firstError, code: "VALIDATION_ERROR" };
   }
+
+  // Wilayah dan kategori wajib dipilih (sumber sudah divalidasi di atas)
+  if (!formData.daopOrStation || formData.daopOrStation.trim() === "") {
+    return { success: false, error: "Wilayah operasional wajib dipilih.", code: "VALIDATION_ERROR" };
+  }
+  if (!formData.categoryId || formData.categoryId.trim() === "") {
+    return { success: false, error: "Kategori keluhan wajib dipilih.", code: "VALIDATION_ERROR" };
+  }
+    const areaName = formData.daopOrStation.trim();
 
   const complaintDate = formData.date ? new Date(formData.date) : new Date();
   const validDate = isNaN(complaintDate.getTime()) ? new Date() : complaintDate;
@@ -179,46 +191,40 @@ export async function createComplaint(formData: {
           initialStatus = ComplaintStatus.DALAM_PENANGANAN;
         }
 
-        // 3. Buat baris keluhan baru
-        // Fetch default category master
-        const defaultCategoryMaster = await tx.complaintCategoryMaster.findUnique({
-          where: { name: 'Umum / Belum Dikategorikan' },
-        });
-        if (!defaultCategoryMaster) {
-          throw new Error('Default ComplaintCategoryMaster "Umum / Belum Dikategorikan" not found');
+        // 3. Validasi pilihan terhadap data master (hanya yang aktif)
+        const sourceMaster = await findMasterByName(tx, "source", formData.source, { activeOnly: true });
+        if (!sourceMaster) {
+          throw new Error("Sumber keluhan tidak tersedia atau sudah dinonaktifkan. Pilih sumber lain.");
         }
 
-        // Resolve sourceId if possible
-        let sourceId: string | null = null;
-        if (formData.source) {
-          const src = await tx.complaintSource.findFirst({
-            where: { name: formData.source.trim() },
-          });
-          if (src) sourceId = src.id;
+                const areaMaster = await findMasterByName(tx, "area", areaName, { activeOnly: true });
+        if (!areaMaster) {
+          throw new Error("Wilayah operasional tidak tersedia atau sudah dinonaktifkan. Pilih wilayah lain.");
         }
-        // Resolve areaId if possible
-        let areaId: string | null = null;
-        if (formData.daopOrStation) {
-          const area = await tx.operationalArea.findFirst({
-            where: { name: formData.daopOrStation.trim() },
-          });
-          if (area) areaId = area.id;
+
+        const categoryMaster = await findCategoryForNewComplaint(tx, formData.categoryId);
+        if (!categoryMaster) {
+          throw new Error("Kategori keluhan tidak tersedia atau sudah dinonaktifkan. Pilih kategori lain.");
         }
-        // Compute SLA snapshot
-        const { slaHours, slaStartAt, slaDeadlineInitial, slaDeadline } = computeSlaSnapshot(validDate);
+
+        // Snapshot SLA memakai target kategori terpilih (perhitungan jam kerja menyusul di Tahap 4)
+        const { slaHours, slaStartAt, slaDeadlineInitial, slaDeadline } = computeSlaSnapshot(
+          validDate,
+          categoryMaster.slaHours
+        );
 
         const newComplaint = await tx.complaint.create({
           data: {
             complaintNumber,
             customerName: formData.customerName.trim(),
             customerContact: formData.customerContact?.trim() || null,
-            daopOrStation: formData.daopOrStation?.trim() || null,
-            source: formData.source,
-            sourceId,
-            areaId,
-            categoryId: defaultCategoryMaster.id,
-            // keep enum category for backwards compatibility
-            category: (formData.category as ComplaintCategory) || null,
+            daopOrStation: areaMaster.name,
+            source: sourceMaster.name,
+            sourceId: sourceMaster.id,
+            areaId: areaMaster.id,
+            categoryId: categoryMaster.id,
+            // kolom enum lama tetap diisi untuk kategori bawaan (kompatibel dengan arsip dan ekspor)
+            category: legacyCategoryFromName(categoryMaster.name) as ComplaintCategory | null,
             description: formData.description.trim(),
             date: validDate,
             status: initialStatus,
@@ -242,7 +248,7 @@ export async function createComplaint(formData: {
             entityId: newComplaint.id,
             details: {
               complaintNumber,
-              category: formData.category,
+              category: categoryMaster.name,
               status: initialStatus,
               picId: assignedPicId,
             },
@@ -1272,7 +1278,14 @@ export async function editComplaintDetails(
     const result = await prisma.$transaction(async (tx) => {
       const complaint = await tx.complaint.findUnique({
         where: { id: complaintId },
-        select: { id: true, status: true, picId: true, complaintNumber: true },
+        select: {
+          id: true,
+          status: true,
+          picId: true,
+          complaintNumber: true,
+          source: true,
+          daopOrStation: true,
+        },
       });
 
       if (!complaint) {
@@ -1294,9 +1307,36 @@ export async function editComplaintDetails(
         updateData.customerContact = data.customerContact.trim() || null;
       }
       if (data.daopOrStation !== undefined) {
-        updateData.daopOrStation = data.daopOrStation.trim() || null;
+        const cleanArea = data.daopOrStation.trim();
+        if (cleanArea === "") {
+          throw new Error("Wilayah operasional wajib dipilih.");
+        } else if (cleanArea === (complaint.daopOrStation ?? "")) {
+          // Tidak berubah: nilai lama boleh dipertahankan walau masternya nonaktif. Sinkronkan id bila ada.
+          const existingArea = await findMasterByName(tx, "area", cleanArea, { activeOnly: false });
+          if (existingArea) updateData.areaId = existingArea.id;
+        } else {
+          const area = await findMasterByName(tx, "area", cleanArea, { activeOnly: true });
+          if (!area) {
+            throw new Error("Wilayah operasional tidak tersedia atau sudah dinonaktifkan. Pilih wilayah lain.");
+          }
+          updateData.daopOrStation = area.name;
+          updateData.areaId = area.id;
+        }
       }
-      if (data.source) updateData.source = data.source;
+      if (data.source) {
+        const cleanSource = data.source.trim();
+        if (cleanSource === complaint.source) {
+          const existingSource = await findMasterByName(tx, "source", cleanSource, { activeOnly: false });
+          if (existingSource) updateData.sourceId = existingSource.id;
+        } else {
+          const src = await findMasterByName(tx, "source", cleanSource, { activeOnly: true });
+          if (!src) {
+            throw new Error("Sumber keluhan tidak tersedia atau sudah dinonaktifkan. Pilih sumber lain.");
+          }
+          updateData.source = src.name;
+          updateData.sourceId = src.id;
+        }
+      }
       if (data.category !== undefined) {
         updateData.category = (data.category as ComplaintCategory) || null;
       }

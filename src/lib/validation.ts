@@ -82,11 +82,11 @@ export function validateComplaintInput(input: ComplaintInput): ValidationResult 
     errors.description = "Uraian keluhan minimal 10 karakter agar informatif bagi petugas.";
   }
 
+  // Keanggotaan sumber diperiksa terhadap data master di database (lihat createComplaint),
+  // sehingga di sini cukup memastikan sumber sudah dipilih.
   const source = input.source?.trim();
   if (!source) {
     errors.source = "Sumber saluran keluhan wajib dipilih.";
-  } else if (!VALID_SOURCES.includes(source as any)) {
-    errors.source = "Sumber saluran keluhan tidak valid.";
   }
 
   if (input.category && !VALID_CATEGORIES.includes(input.category as any)) {

@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_CATEGORY_NAME,
+  buildSelectOptions,
+  LEGACY_CATEGORIES,
+  legacyCategoryFromName,
+  selectableCategories,
   decideDeleteAction,
   isMasterKind,
   isProtectedMasterItem,
@@ -99,5 +103,61 @@ describe("masterDataRules: toMasterItem", () => {
     expect(cat.slaHours).toBe(48);
     expect(cat.description).toBeNull();
     expect(cat.usageCount).toBe(0);
+  });
+});
+
+describe("masterDataRules: buildSelectOptions", () => {
+  const items = [
+    { id: "1", name: "Daop 1 Jakarta", isActive: true, usageCount: 2 },
+    { id: "2", name: "Daop Lama", isActive: false, usageCount: 5 },
+    { id: "3", name: "Daop 2 Bandung", isActive: true, usageCount: 0 },
+  ];
+
+  it("hanya menampilkan master yang aktif", () => {
+    expect(buildSelectOptions(items)).toEqual(["Daop 1 Jakarta", "Daop 2 Bandung"]);
+  });
+
+  it("menambahkan nilai keluhan yang sedang dipakai walau master-nya nonaktif", () => {
+    expect(buildSelectOptions(items, "Daop Lama")).toEqual(["Daop 1 Jakarta", "Daop 2 Bandung", "Daop Lama"]);
+  });
+
+  it("menambahkan nilai lama yang tidak ada di master, tanpa menggandakan yang sudah ada", () => {
+    expect(buildSelectOptions(items, "Telepon")).toContain("Telepon");
+    expect(buildSelectOptions(items, "Daop 1 Jakarta")).toEqual(["Daop 1 Jakarta", "Daop 2 Bandung"]);
+  });
+
+  it("mengabaikan nilai kosong atau null", () => {
+    expect(buildSelectOptions(items, "")).toEqual(["Daop 1 Jakarta", "Daop 2 Bandung"]);
+    expect(buildSelectOptions(items, null)).toEqual(["Daop 1 Jakarta", "Daop 2 Bandung"]);
+  });
+});
+
+describe("masterDataRules: kategori lama dipertahankan", () => {
+  it("memuat ketujuh kategori lama dengan kode enum aslinya", () => {
+    expect(LEGACY_CATEGORIES.map((c) => c.code)).toEqual([
+      "KESELAMATAN_KEAMANAN",
+      "FASILITAS_KERETA",
+      "FASILITAS_STASIUN",
+      "TIKET_DAN_SISTEM",
+      "PELAYANAN_PETUGAS",
+      "REFUND_DAN_TARIF",
+      "INFORMASI_DAN_LAINNYA",
+    ]);
+  });
+
+  it("memetakan nama master kembali ke kode enum lama", () => {
+    expect(legacyCategoryFromName("Fasilitas Kereta")).toBe("FASILITAS_KERETA");
+    expect(legacyCategoryFromName("  refund   dan tarif ")).toBe("REFUND_DAN_TARIF");
+    expect(legacyCategoryFromName("Kategori Buatan Admin")).toBeNull();
+    expect(legacyCategoryFromName(null)).toBeNull();
+  });
+
+  it("kategori yang boleh dipilih: aktif dan bukan kategori cadangan sistem", () => {
+    const items = [
+      { id: "1", name: DEFAULT_CATEGORY_NAME, isActive: true, usageCount: 4, slaHours: 24 },
+      { id: "2", name: "Fasilitas Kereta", isActive: true, usageCount: 0, slaHours: 24 },
+      { id: "3", name: "Kategori Lama", isActive: false, usageCount: 1, slaHours: 24 },
+    ];
+    expect(selectableCategories(items).map((i) => i.id)).toEqual(["2"]);
   });
 });
