@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import DashboardClient from "@/components/DashboardClient";
 import { redirect } from "next/navigation";
 import { ComplaintData, UserSummary, Role } from "@/types/database";
+import { EMPTY_MASTER_DATA, MasterDataLists, toMasterItem } from "@/lib/masterDataRules";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function DashboardPage() {
 
   let rawComplaints: ComplaintData[] = [];
   let rawPicList: UserSummary[] = [];
+  let masterData: MasterDataLists = EMPTY_MASTER_DATA;
   let dbError: string | null = null;
 
   try {
@@ -57,6 +59,21 @@ export default async function DashboardPage() {
     });
 
     rawPicList = usersData as unknown as UserSummary[];
+
+    // 3. Data master (wilayah, kategori, sumber) hanya dimuat untuk Admin
+    if (user.role === Role.ADMIN) {
+      const countComplaints = { _count: { select: { complaints: true } } };
+      const [areas, sources, categories] = await Promise.all([
+        prisma.operationalArea.findMany({ orderBy: { name: "asc" }, include: countComplaints }),
+        prisma.complaintSource.findMany({ orderBy: { name: "asc" }, include: countComplaints }),
+        prisma.complaintCategoryMaster.findMany({ orderBy: { name: "asc" }, include: countComplaints }),
+      ]);
+      masterData = {
+        areas: areas.map(toMasterItem),
+        sources: sources.map(toMasterItem),
+        categories: categories.map(toMasterItem),
+      };
+    }
   } catch (err: any) {
     console.error("Terjadi kendala koneksi database:", err);
     dbError = err?.message || String(err);
@@ -108,6 +125,7 @@ export default async function DashboardPage() {
       complaints={rawComplaints}
       picList={rawPicList}
       currentUser={currentUser}
+      masterData={masterData}
     />
   );
 }

@@ -30,6 +30,8 @@ import ComplaintCreateModal from "./dashboard/ComplaintCreateModal";
 import ComplaintDeleteModal from "./dashboard/ComplaintDeleteModal";
 import ToastNotification from "./dashboard/ToastNotification";
 import KaiDocumentModal from "./KaiDocumentModal";
+import MasterDataTab from "./dashboard/MasterDataTab";
+import { MasterDataLists, EMPTY_MASTER_DATA } from "@/lib/masterDataRules";
 
 export type { ComplaintData, UserSummary } from "@/types/database";
 
@@ -37,12 +39,14 @@ interface DashboardClientProps {
   complaints: ComplaintData[];
   picList: UserSummary[];
   currentUser: UserSummary;
+  masterData?: MasterDataLists;
 }
 
 export default function DashboardClient({
   complaints,
   picList,
   currentUser,
+  masterData = EMPTY_MASTER_DATA,
 }: DashboardClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -61,6 +65,7 @@ export default function DashboardClient({
     }
   }, [searchParams]);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Filters State
   const [searchQuery, setSearchQuery] = useState("");
@@ -317,6 +322,7 @@ export default function DashboardClient({
         currentUser={currentUser}
         activeMenu={activeMenu}
         setActiveMenu={(m) => {
+          setIsSettingsOpen(false);
           setActiveMenu(m);
           if (m === "verifications") {
             if (currentUser.role === Role.ADMIN) {
@@ -334,6 +340,8 @@ export default function DashboardClient({
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onOpenDocModal={() => setIsDocModalOpen(true)}
         onResetSpecialFilters={handleResetSpecialFilters}
+        isSettingsActive={isSettingsOpen && currentUser.role === Role.ADMIN}
+        onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
       {/* 2. Main Content Area (Disembunyikan saat mencetak agar hanya modal dokumen KAI yang dicetak) */}
@@ -349,6 +357,10 @@ export default function DashboardClient({
 
         {/* Main Body */}
         <main className="p-4 sm:p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
+          {isSettingsOpen && currentUser.role === Role.ADMIN ? (
+            <MasterDataTab masterData={masterData} onNotify={showToast} />
+          ) : (
+          <>
           {activeMenu === "overview" && (
             <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-sm relative overflow-hidden">
               <div className="relative z-10 space-y-1.5">
@@ -537,6 +549,8 @@ export default function DashboardClient({
             }
             isAssignedToCurrentUser={isAssignedToCurrentUser}
           />
+          </>
+          )}
         </main>
       </div>
 
