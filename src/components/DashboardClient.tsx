@@ -32,6 +32,7 @@ import ToastNotification from "./dashboard/ToastNotification";
 import KaiDocumentModal from "./KaiDocumentModal";
 import MasterDataTab from "./dashboard/MasterDataTab";
 import { MasterDataLists, EMPTY_MASTER_DATA } from "@/lib/masterDataRules";
+import { HolidayItem } from "@/lib/holidayRules";
 
 export type { ComplaintData, UserSummary } from "@/types/database";
 
@@ -40,6 +41,7 @@ interface DashboardClientProps {
   picList: UserSummary[];
   currentUser: UserSummary;
   masterData?: MasterDataLists;
+  holidays?: HolidayItem[];
 }
 
 export default function DashboardClient({
@@ -47,6 +49,7 @@ export default function DashboardClient({
   picList,
   currentUser,
   masterData = EMPTY_MASTER_DATA,
+  holidays = [],
 }: DashboardClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -358,7 +361,7 @@ export default function DashboardClient({
         {/* Main Body */}
         <main className="p-4 sm:p-6 md:p-8 space-y-6 max-w-7xl mx-auto w-full">
           {isSettingsOpen && currentUser.role === Role.ADMIN ? (
-            <MasterDataTab masterData={masterData} onNotify={showToast} />
+            <MasterDataTab masterData={masterData} holidays={holidays} onNotify={showToast} />
           ) : (
           <>
           {activeMenu === "overview" && (

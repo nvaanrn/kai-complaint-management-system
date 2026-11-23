@@ -4,6 +4,7 @@ import DashboardClient from "@/components/DashboardClient";
 import { redirect } from "next/navigation";
 import { ComplaintData, UserSummary, Role } from "@/types/database";
 import { EMPTY_MASTER_DATA, MasterDataLists, toMasterItem } from "@/lib/masterDataRules";
+import { HolidayItem, toHolidayItem } from "@/lib/holidayRules";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function DashboardPage() {
   let rawComplaints: ComplaintData[] = [];
   let rawPicList: UserSummary[] = [];
   let masterData: MasterDataLists = EMPTY_MASTER_DATA;
+  let holidays: HolidayItem[] = [];
   let dbError: string | null = null;
 
   try {
@@ -73,6 +75,8 @@ export default async function DashboardPage() {
         sources: sources.map(toMasterItem),
         categories: categories.map(toMasterItem),
       };
+      const holidayRows = await prisma.holiday.findMany({ orderBy: { date: "asc" } });
+      holidays = holidayRows.map(toHolidayItem);
     }
   } catch (err: any) {
     console.error("Terjadi kendala koneksi database:", err);
@@ -126,6 +130,7 @@ export default async function DashboardPage() {
       picList={rawPicList}
       currentUser={currentUser}
       masterData={masterData}
+      holidays={holidays}
     />
   );
 }

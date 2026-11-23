@@ -2,6 +2,8 @@
 
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import HolidayManager from "./HolidayManager";
+import { HolidayItem } from "@/lib/holidayRules";
 import {
   createMasterItem,
   updateMasterItem,
@@ -20,6 +22,7 @@ import {
 
 interface MasterDataTabProps {
   masterData: MasterDataLists;
+  holidays?: HolidayItem[];
   onNotify: (message: string, type?: "success" | "error") => void;
 }
 
@@ -29,11 +32,12 @@ const TABS: { kind: MasterKind; key: keyof MasterDataLists }[] = [
   { kind: "source", key: "sources" },
 ];
 
-export default function MasterDataTab({ masterData, onNotify }: MasterDataTabProps) {
+export default function MasterDataTab({ masterData, holidays = [], onNotify }: MasterDataTabProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [kind, setKind] = useState<MasterKind>("area");
+  const [showHolidays, setShowHolidays] = useState(false);
   const [form, setForm] = useState<{ mode: "create" | "edit"; item?: MasterItem } | null>(null);
   const [name, setName] = useState("");
   const [slaHours, setSlaHours] = useState("24");
@@ -129,7 +133,7 @@ export default function MasterDataTab({ masterData, onNotify }: MasterDataTabPro
           Setting &bull; Master Data
         </h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          Kelola isi pilihan (dropdown) pada form keluhan. Data yang sudah dipakai keluhan tidak
+          Kelola isi pilihan (dropdown) pada form keluhan dan daftar hari libur untuk SLA. Data yang sudah dipakai keluhan tidak
           dihapus permanen, tetapi dinonaktifkan agar riwayat tetap utuh. Daftar PIC mengikuti
           akun pengguna berperan PIC dan dikelola di menu Manajemen User.
         </p>
@@ -142,9 +146,12 @@ export default function MasterDataTab({ masterData, onNotify }: MasterDataTabPro
               <button
                 key={t.kind}
                 type="button"
-                onClick={() => setKind(t.kind)}
+                onClick={() => {
+                  setKind(t.kind);
+                  setShowHolidays(false);
+                }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                  kind === t.kind
+                  !showHolidays && kind === t.kind
                     ? "bg-blue-900 text-white shadow-md"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
@@ -152,16 +159,32 @@ export default function MasterDataTab({ masterData, onNotify }: MasterDataTabPro
                 {MASTER_LABELS[t.kind]}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setShowHolidays(true)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                showHolidays
+                  ? "bg-blue-900 text-white shadow-md"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Hari Libur
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="px-4 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-md cursor-pointer self-start sm:self-auto"
-          >
-            + Tambah {MASTER_LABELS[kind]}
-          </button>
+          {!showHolidays && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="px-4 py-2 text-xs font-semibold text-white bg-blue-900 hover:bg-blue-800 rounded-xl transition shadow-md cursor-pointer self-start sm:self-auto"
+            >
+              + Tambah {MASTER_LABELS[kind]}
+            </button>
+          )}
         </div>
 
+        {showHolidays ? (
+          <HolidayManager holidays={holidays} onNotify={onNotify} />
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead className="bg-slate-50 text-slate-600 uppercase tracking-wider text-[10px]">
@@ -247,6 +270,7 @@ export default function MasterDataTab({ masterData, onNotify }: MasterDataTabPro
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* Modal tambah / ubah */}
