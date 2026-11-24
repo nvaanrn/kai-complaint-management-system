@@ -11,7 +11,10 @@ import {
   normalizeMasterName,
   toMasterItem,
   validateMasterName,
-  validateSlaHours,
+  validateSlaDays,
+  daysToHours,
+  hoursToDays,
+  formatSlaTarget,
 } from "@/lib/masterDataRules";
 
 describe("masterDataRules: nama", () => {
@@ -37,21 +40,37 @@ describe("masterDataRules: nama", () => {
   });
 });
 
-describe("masterDataRules: target SLA", () => {
-  it("menerima bilangan bulat dalam rentang", () => {
-    expect(validateSlaHours(1).valid).toBe(true);
-    expect(validateSlaHours(24).valid).toBe(true);
-    expect(validateSlaHours(720).valid).toBe(true);
+describe("masterDataRules: target SLA (hari kerja)", () => {
+  it("menerima bilangan bulat 1 sampai 30 hari", () => {
+    expect(validateSlaDays(1).valid).toBe(true);
+    expect(validateSlaDays(5).valid).toBe(true);
+    expect(validateSlaDays(30).valid).toBe(true);
   });
 
-  it("menolak nol, negatif, pecahan, NaN, dan di atas batas", () => {
-    expect(validateSlaHours(0).valid).toBe(false);
-    expect(validateSlaHours(-5).valid).toBe(false);
-    expect(validateSlaHours(1.5).valid).toBe(false);
-    expect(validateSlaHours(Number.NaN).valid).toBe(false);
-    expect(validateSlaHours(721).valid).toBe(false);
-    expect(validateSlaHours("24").valid).toBe(false);
-    expect(validateSlaHours(undefined).valid).toBe(false);
+  it("menolak nol, negatif, pecahan, NaN, di atas batas, dan bukan angka", () => {
+    expect(validateSlaDays(0).valid).toBe(false);
+    expect(validateSlaDays(-1).valid).toBe(false);
+    expect(validateSlaDays(1.5).valid).toBe(false);
+    expect(validateSlaDays(Number.NaN).valid).toBe(false);
+    expect(validateSlaDays(31).valid).toBe(false);
+    expect(validateSlaDays("2").valid).toBe(false);
+    expect(validateSlaDays(undefined).valid).toBe(false);
+  });
+
+  it("hari dan jam saling dikonversi (1 hari = 24 jam)", () => {
+    expect(daysToHours(1)).toBe(24);
+    expect(daysToHours(2)).toBe(48);
+    expect(hoursToDays(24)).toBe(1);
+    expect(hoursToDays(48)).toBe(2);
+    expect(hoursToDays(0)).toBe(1);
+  });
+
+  it("memformat target SLA untuk tampilan", () => {
+    expect(formatSlaTarget(24)).toBe("1 hari kerja");
+    expect(formatSlaTarget(48)).toBe("2 hari kerja");
+    expect(formatSlaTarget(36)).toBe("36 jam");
+    expect(formatSlaTarget(undefined)).toBe("-");
+    expect(formatSlaTarget(null)).toBe("-");
   });
 });
 

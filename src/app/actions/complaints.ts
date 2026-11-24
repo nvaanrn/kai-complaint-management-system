@@ -23,6 +23,7 @@ import { formatComplaintNumber, parseNextSequence } from "@/lib/complaintNumber"
 import { Permissions } from "@/lib/permissions";
 import { validateStateTransition } from "@/lib/state-machine";
 import { computeSlaSnapshot } from "@/lib/slaSnapshot";
+import { loadHolidayKeys } from "@/lib/holidayLookup";
 import { findMasterByName, findCategoryForNewComplaint } from "@/lib/masterLookup";
 import { legacyCategoryFromName } from "@/lib/masterDataRules";
 import { DOCUMENT_HEADER } from "@/config/documentTemplate";
@@ -207,10 +208,13 @@ export async function createComplaint(formData: {
           throw new Error("Kategori keluhan tidak tersedia atau sudah dinonaktifkan. Pilih kategori lain.");
         }
 
-        // Snapshot SLA memakai target kategori terpilih (perhitungan jam kerja menyusul di Tahap 4)
+        // Snapshot SLA dalam hari kerja (Sabtu, Minggu, dan hari libur tidak dihitung),
+        // dihitung sejak keluhan dicatat dan memakai target kategori terpilih.
+        const holidayKeys = await loadHolidayKeys(tx);
         const { slaHours, slaStartAt, slaDeadlineInitial, slaDeadline } = computeSlaSnapshot(
-          validDate,
-          categoryMaster.slaHours
+          new Date(),
+          categoryMaster.slaHours,
+          holidayKeys
         );
 
         const newComplaint = await tx.complaint.create({

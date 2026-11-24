@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { UserSummary, Role } from "@/types/database";
-import { MasterDataLists, buildSelectOptions, selectableCategories } from "@/lib/masterDataRules";
+import { MasterDataLists, buildSelectOptions, selectableCategories, formatSlaTarget } from "@/lib/masterDataRules";
 
 interface ComplaintCreateModalProps {
   picList: UserSummary[];
@@ -208,7 +208,7 @@ export default function ComplaintCreateModal({
               </select>
               {selectedCategory && (
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Target SLA kategori ini: {selectedCategory.slaHours} jam kerja.
+                  Target SLA kategori ini: {formatSlaTarget(selectedCategory.slaHours)}.
                 </p>
               )}
             </div>

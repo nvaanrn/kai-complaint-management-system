@@ -89,13 +89,13 @@ describe("Server action master data: tambah", () => {
   });
 
   it("kategori wajib punya target SLA yang valid", async () => {
-    const bad = await createMasterItem("category", { name: "Fasilitas", slaHours: 0 });
+    const bad = await createMasterItem("category", { name: "Fasilitas", slaDays: 0 });
     expect(bad.success).toBe(false);
     expect(bad.code).toBe("VALIDATION_ERROR");
     expect(mocks.category.create).not.toHaveBeenCalled();
 
     mocks.category.create.mockResolvedValue({ id: "c-new" });
-    const ok = await createMasterItem("category", { name: "Fasilitas", slaHours: 48, description: " AC dan toilet " });
+    const ok = await createMasterItem("category", { name: "Fasilitas", slaDays: 2, description: " AC dan toilet " });
     expect(ok.success).toBe(true);
     expect(mocks.category.create).toHaveBeenCalledWith({
       data: { name: "Fasilitas", slaHours: 48, description: "AC dan toilet" },
@@ -141,9 +141,9 @@ describe("Server action master data: ubah", () => {
   it("target SLA kategori bawaan tetap boleh diubah", async () => {
     mocks.category.findUnique.mockResolvedValue({ id: "c1", name: "Umum / Belum Dikategorikan" });
     mocks.category.update.mockResolvedValue({});
-    const res = await updateMasterItem("category", "c1", { slaHours: 36 });
+    const res = await updateMasterItem("category", "c1", { slaDays: 3 });
     expect(res.success).toBe(true);
-    expect(mocks.category.update).toHaveBeenCalledWith({ where: { id: "c1" }, data: { slaHours: 36 } });
+    expect(mocks.category.update).toHaveBeenCalledWith({ where: { id: "c1" }, data: { slaHours: 72 } });
   });
 
   it("tanpa perubahan tidak menulis ke database", async () => {

@@ -32,7 +32,7 @@ export const EMPTY_MASTER_DATA: MasterDataLists = { areas: [], sources: [], cate
 
 export interface MasterItemInput {
   name?: string;
-  slaHours?: number;
+  slaDays?: number; // target SLA dalam HARI KERJA (disimpan di database sebagai hari x 24 pada kolom slaHours)
   description?: string | null;
   isActive?: boolean;
 }
@@ -50,8 +50,10 @@ export interface MasterActionResult<T = unknown> {
 export const DEFAULT_CATEGORY_NAME = "Umum / Belum Dikategorikan";
 
 export const MASTER_NAME_MAX_LENGTH = 100;
-export const SLA_HOURS_MIN = 1;
-export const SLA_HOURS_MAX = 720;
+// SLA dinyatakan dalam HARI KERJA. Satu hari = 24 jam; database menyimpan hari x 24 pada kolom slaHours.
+export const HOURS_PER_DAY = 24;
+export const SLA_DAYS_MIN = 1;
+export const SLA_DAYS_MAX = 30;
 export const DESCRIPTION_MAX_LENGTH = 500;
 
 export function isMasterKind(value: unknown): value is MasterKind {
@@ -76,18 +78,33 @@ export function validateMasterName(raw: unknown): { valid: boolean; value: strin
   return { valid: true, value };
 }
 
-export function validateSlaHours(raw: unknown): { valid: boolean; value: number; error?: string } {
+export function validateSlaDays(raw: unknown): { valid: boolean; value: number; error?: string } {
   if (typeof raw !== "number" || !Number.isInteger(raw)) {
-    return { valid: false, value: 0, error: "Target SLA harus berupa bilangan bulat (jam kerja)." };
+    return { valid: false, value: 0, error: "Target SLA harus berupa bilangan bulat (hari kerja)." };
   }
-  if (raw < SLA_HOURS_MIN || raw > SLA_HOURS_MAX) {
+  if (raw < SLA_DAYS_MIN || raw > SLA_DAYS_MAX) {
     return {
       valid: false,
       value: raw,
-      error: `Target SLA harus antara ${SLA_HOURS_MIN} dan ${SLA_HOURS_MAX} jam kerja.`,
+      error: `Target SLA harus antara ${SLA_DAYS_MIN} dan ${SLA_DAYS_MAX} hari kerja.`,
     };
   }
   return { valid: true, value: raw };
+}
+
+export function daysToHours(days: number): number {
+  return days * HOURS_PER_DAY;
+}
+
+export function hoursToDays(hours: number): number {
+  return Math.max(1, Math.ceil(hours / HOURS_PER_DAY));
+}
+
+/** Teks target SLA untuk tampilan: 24 jam menjadi "1 hari kerja", 48 jam menjadi "2 hari kerja". */
+export function formatSlaTarget(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined) return "-";
+  if (hours % HOURS_PER_DAY === 0) return `${hours / HOURS_PER_DAY} hari kerja`;
+  return `${hours} jam`;
 }
 
 export function normalizeDescription(raw: unknown): string | null {
@@ -136,7 +153,7 @@ export function buildSelectOptions(items: MasterItem[], currentValue?: string | 
 }
 
 // Kategori keluhan lama (enum ComplaintCategory) dipertahankan sebagai data master.
-// Target SLA awal 24 jam hanyalah nilai sementara; Admin mengubahnya per kategori di Master Data.
+// Target SLA awal 1 hari kerja (24 jam) hanyalah nilai sementara; Admin mengubahnya per kategori di Master Data.
 export const LEGACY_CATEGORIES: ReadonlyArray<{ code: string; name: string; description: string }> = [
   { code: "KESELAMATAN_KEAMANAN", name: "Keselamatan dan Keamanan", description: "Keamanan, barang tertinggal, pelecehan" },
   { code: "FASILITAS_KERETA", name: "Fasilitas Kereta", description: "AC, toilet, stopkontak, kebersihan kereta" },

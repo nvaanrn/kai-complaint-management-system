@@ -15,8 +15,10 @@ import {
   MasterKind,
   MASTER_LABELS,
   MASTER_NAME_MAX_LENGTH,
-  SLA_HOURS_MIN,
-  SLA_HOURS_MAX,
+  SLA_DAYS_MIN,
+  SLA_DAYS_MAX,
+  formatSlaTarget,
+  hoursToDays,
   isProtectedMasterItem,
 } from "@/lib/masterDataRules";
 
@@ -40,7 +42,7 @@ export default function MasterDataTab({ masterData, holidays = [], onNotify }: M
   const [showHolidays, setShowHolidays] = useState(false);
   const [form, setForm] = useState<{ mode: "create" | "edit"; item?: MasterItem } | null>(null);
   const [name, setName] = useState("");
-  const [slaHours, setSlaHours] = useState("24");
+  const [slaDays, setSlaDays] = useState("1");
   const [description, setDescription] = useState("");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -53,7 +55,7 @@ export default function MasterDataTab({ masterData, holidays = [], onNotify }: M
 
   const openCreate = () => {
     setName("");
-    setSlaHours("24");
+    setSlaDays("1");
     setDescription("");
     setFormError("");
     setForm({ mode: "create" });
@@ -61,7 +63,7 @@ export default function MasterDataTab({ masterData, holidays = [], onNotify }: M
 
   const openEdit = (item: MasterItem) => {
     setName(item.name);
-    setSlaHours(String(item.slaHours ?? 24));
+    setSlaDays(String(hoursToDays(item.slaHours ?? 24)));
     setDescription(item.description ?? "");
     setFormError("");
     setForm({ mode: "edit", item });
@@ -75,7 +77,7 @@ export default function MasterDataTab({ masterData, holidays = [], onNotify }: M
     try {
       const payload =
         kind === "category"
-          ? { name, slaHours: Number(slaHours), description }
+          ? { name, slaDays: Number(slaDays), description }
           : { name };
       const res =
         form.mode === "create"
@@ -220,7 +222,7 @@ export default function MasterDataTab({ masterData, holidays = [], onNotify }: M
                       )}
                     </td>
                     {kind === "category" && (
-                      <td className="px-4 py-3 text-slate-700">{item.slaHours} jam kerja</td>
+                      <td className="px-4 py-3 text-slate-700">{formatSlaTarget(item.slaHours)}</td>
                     )}
                     <td className="px-4 py-3 text-slate-700">{item.usageCount} keluhan</td>
                     <td className="px-4 py-3">
@@ -313,19 +315,20 @@ export default function MasterDataTab({ masterData, holidays = [], onNotify }: M
               <>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Target SLA (jam kerja) <span className="text-rose-500">*</span>
+                    Target SLA (hari kerja) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
-                    min={SLA_HOURS_MIN}
-                    max={SLA_HOURS_MAX}
+                    min={SLA_DAYS_MIN}
+                    max={SLA_DAYS_MAX}
                     step={1}
-                    value={slaHours}
-                    onChange={(e) => setSlaHours(e.target.value)}
+                    value={slaDays}
+                    onChange={(e) => setSlaDays(e.target.value)}
                     className={inputClass}
                   />
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Perubahan target hanya berlaku untuk keluhan baru. Keluhan lama tetap memakai target saat dicatat.
+                    Satu hari kerja = 24 jam. Sabtu, Minggu, dan hari libur tidak dihitung. Perubahan target hanya
+                    berlaku untuk keluhan baru; keluhan lama tetap memakai target saat dicatat.
                   </p>
                 </div>
                 <div>

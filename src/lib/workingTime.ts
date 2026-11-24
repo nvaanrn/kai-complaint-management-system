@@ -1,22 +1,21 @@
-import { WORKING_HOURS_CONFIG } from "@/config/workingHours";
+import { WORKING_CALENDAR } from "@/config/workingCalendar";
 
 /**
- * Perhitungan waktu kerja untuk SLA. Semua fungsi murni (tanpa database):
+ * Perhitungan hari kerja untuk SLA. Semua fungsi murni (tanpa database):
  * daftar hari libur diberikan pemanggil sebagai kunci tanggal "YYYY-MM-DD" (WIB).
+ *
+ * Aturan: satu hari kerja = 24 jam. Tenggat jatuh pada JAM YANG SAMA, beberapa hari kerja
+ * kemudian. Sabtu, Minggu, dan hari libur dilewati (tidak dihitung sebagai hari).
+ * Jika keluhan dicatat pada hari non-kerja, hari kerja pertama sesudahnya dihitung sebagai hari ke-1.
  */
 
-const MS_PER_MINUTE = 60 * 1000;
-const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 const MAX_SCAN_DAYS = 3650; // pengaman: sepuluh tahun
 
 type Holidays = ReadonlySet<string> | readonly string[];
 
-const OFFSET_MS = WORKING_HOURS_CONFIG.utcOffsetHours * MS_PER_HOUR;
-const SEGMENTS_MS = WORKING_HOURS_CONFIG.segments.map((s) => ({
-  start: s.start * MS_PER_MINUTE,
-  end: s.end * MS_PER_MINUTE,
-}));
+const OFFSET_MS = WORKING_CALENDAR.utcOffsetHours * MS_PER_HOUR;
 
 function toSet(holidays: Holidays | undefined): ReadonlySet<string> {
   if (!holidays) return new Set<string>();
@@ -42,7 +41,7 @@ function weekdayFromIndex(dayIndex: number): number {
 }
 
 function isWorkingDayIndex(dayIndex: number, holidays: ReadonlySet<string>): boolean {
-  if (!WORKING_HOURS_CONFIG.workDays.includes(weekdayFromIndex(dayIndex))) return false;
+  if (!WORKING_CALENDAR.workDays.includes(weekdayFromIndex(dayIndex))) return false;
   return !holidays.has(dayKeyFromIndex(dayIndex));
 }
 
@@ -51,71 +50,60 @@ export function toDayKey(date: Date): string {
   return dayKeyFromIndex(Math.floor(toLocalMs(date) / MS_PER_DAY));
 }
 
-/** Jumlah jam kerja dalam satu hari kerja penuh (8 jam pada konfigurasi awal). */
-export function workingHoursPerDay(): number {
-  return SEGMENTS_MS.reduce((sum, s) => sum + (s.end - s.start), 0) / MS_PER_HOUR;
+/** Apakah tanggal (menurut WIB) adalah hari kerja: bukan akhir pekan dan bukan hari libur. */
+export function isWorkingDay(date: Date, holidays?: Holidays): boolean {
+  return isWorkingDayIndex(Math.floor(toLocalMs(date) / MS_PER_DAY), toSet(holidays));
 }
 
 /**
- * Menambahkan sejumlah jam kerja ke waktu awal.
- * - Jika waktu awal di luar jam kerja (malam, akhir pekan, libur, istirahat), hitungan dimulai
- *   pada awal jam kerja berikutnya.
- * - Jika sisa jam habis tepat di akhir jam kerja, tenggat jatuh pada akhir jam kerja itu.
+ * Menambahkan sejumlah HARI KERJA ke waktu awal. Jam dan menit tetap sama.
+ * Contoh: Senin 14:05 + 1 hari kerja = Selasa 14:05; Jumat 14:05 + 1 = Senin 14:05.
  */
-export function addWorkingHours(start: Date, hours: number, holidays?: Holidays): Date {
-  if (!Number.isFinite(hours) || hours < 0) {
-    throw new Error("Jumlah jam kerja harus berupa bilangan tidak negatif.");
+export function addWorkingDays(start: Date, days: number, holidays?: Holidays): Date {
+  if (!Number.isInteger(days) || days < 0) {
+    throw new Error("Jumlah hari kerja harus berupa bilangan bulat tidak negatif.");
   }
-  let remaining = Math.round(hours * MS_PER_HOUR);
-  if (remaining === 0) return new Date(start.getTime());
+  if (days === 0) return new Date(start.getTime());
 
   const holidaySet = toSet(holidays);
   const local = toLocalMs(start);
   let dayIndex = Math.floor(local / MS_PER_DAY);
-  let cursor = local - dayIndex * MS_PER_DAY;
+  const timeOfDay = local - dayIndex * MS_PER_DAY;
 
-  for (let i = 0; i < MAX_SCAN_DAYS; i++, dayIndex++, cursor = 0) {
-    if (!isWorkingDayIndex(dayIndex, holidaySet)) continue;
-    for (const seg of SEGMENTS_MS) {
-      const from = Math.max(seg.start, cursor);
-      if (from >= seg.end) continue;
-      const available = seg.end - from;
-      if (remaining <= available) {
-        return fromLocalMs(dayIndex * MS_PER_DAY + from + remaining);
-      }
-      remaining -= available;
-    }
+  let remaining = days;
+  for (let i = 0; i < MAX_SCAN_DAYS && remaining > 0; i++) {
+    dayIndex++;
+    if (isWorkingDayIndex(dayIndex, holidaySet)) remaining--;
   }
-  throw new Error("Tidak dapat menghitung tenggat SLA: hari kerja tidak ditemukan dalam sepuluh tahun.");
+  if (remaining > 0) {
+    throw new Error("Tidak dapat menghitung tenggat SLA: hari kerja tidak ditemukan dalam sepuluh tahun.");
+  }
+  return fromLocalMs(dayIndex * MS_PER_DAY + timeOfDay);
 }
 
-/** Jumlah milidetik jam kerja yang terlewati di antara dua waktu (0 jika akhir <= awal). */
-export function workingMsBetween(from: Date, to: Date, holidays?: Holidays): number {
+/**
+ * Jumlah hari kerja penuh yang terlewati dari waktu awal sampai waktu akhir
+ * (kebalikan addWorkingDays: n terbesar sehingga addWorkingDays(from, n) <= to).
+ * Hasil 0 jika akhir tidak setelah awal. Dipakai untuk lama keterlambatan.
+ */
+export function workingDaysBetween(from: Date, to: Date, holidays?: Holidays): number {
   const a = toLocalMs(from);
   const b = toLocalMs(to);
   if (b <= a) return 0;
 
   const holidaySet = toSet(holidays);
-  const firstDay = Math.floor(a / MS_PER_DAY);
-  const lastDay = Math.floor(b / MS_PER_DAY);
-  if (lastDay - firstDay > MAX_SCAN_DAYS) {
+  const startDay = Math.floor(a / MS_PER_DAY);
+  const endDay = Math.floor(b / MS_PER_DAY);
+  if (endDay - startDay > MAX_SCAN_DAYS) {
     throw new Error("Rentang waktu terlalu panjang untuk dihitung.");
   }
+  const timeOfDay = a - startDay * MS_PER_DAY;
 
-  let total = 0;
-  for (let day = firstDay; day <= lastDay; day++) {
+  let count = 0;
+  for (let day = startDay + 1; day <= endDay; day++) {
     if (!isWorkingDayIndex(day, holidaySet)) continue;
-    const dayStart = day * MS_PER_DAY;
-    for (const seg of SEGMENTS_MS) {
-      const overlapStart = Math.max(a, dayStart + seg.start);
-      const overlapEnd = Math.min(b, dayStart + seg.end);
-      if (overlapEnd > overlapStart) total += overlapEnd - overlapStart;
-    }
+    if (day * MS_PER_DAY + timeOfDay <= b) count++;
+    else break;
   }
-  return total;
-}
-
-/** Jumlah jam kerja di antara dua waktu. */
-export function workingHoursBetween(from: Date, to: Date, holidays?: Holidays): number {
-  return workingMsBetween(from, to, holidays) / MS_PER_HOUR;
+  return count;
 }

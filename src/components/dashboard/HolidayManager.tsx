@@ -96,7 +96,7 @@ export default function HolidayManager({ holidays, onNotify }: HolidayManagerPro
   return (
     <div>
       <div className="px-4 py-3 bg-sky-50 border-b border-sky-100 text-[11px] text-sky-900 leading-relaxed">
-        Hari libur nasional dan cuti bersama tidak dihitung sebagai jam kerja pada tenggat SLA. Perubahan
+        Hari libur nasional dan cuti bersama tidak dihitung sebagai hari kerja pada tenggat SLA. Perubahan
         daftar ini hanya berlaku untuk keluhan yang dicatat sesudahnya; tenggat keluhan yang sudah tercatat
         tidak berubah.
       </div>

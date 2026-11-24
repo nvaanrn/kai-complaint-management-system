@@ -11,7 +11,8 @@ import {
   MASTER_LABELS,
   isMasterKind,
   validateMasterName,
-  validateSlaHours,
+  validateSlaDays,
+  daysToHours,
   normalizeDescription,
   isProtectedMasterItem,
   decideDeleteAction,
@@ -60,7 +61,7 @@ function mapError(error: any): MasterActionResult<never> {
 // 1. Tambah data master (Admin)
 export async function createMasterItem(
   kind: MasterKind,
-  input: { name: string; slaHours?: number; description?: string | null }
+  input: { name: string; slaDays?: number; description?: string | null }
 ): Promise<MasterActionResult> {
   const denied = await adminGuard();
   if (denied) return denied;
@@ -71,9 +72,9 @@ export async function createMasterItem(
 
   const data: Record<string, unknown> = { name: name.value };
   if (kind === "category") {
-    const sla = validateSlaHours(input.slaHours);
+    const sla = validateSlaDays(input.slaDays);
     if (!sla.valid) return fail(sla.error as string, "VALIDATION_ERROR");
-    data.slaHours = sla.value;
+    data.slaHours = daysToHours(sla.value);
     data.description = normalizeDescription(input.description);
   }
 
@@ -122,10 +123,10 @@ export async function updateMasterItem(
     }
 
     if (kind === "category") {
-      if (input.slaHours !== undefined) {
-        const sla = validateSlaHours(input.slaHours);
+      if (input.slaDays !== undefined) {
+        const sla = validateSlaDays(input.slaDays);
         if (!sla.valid) return fail(sla.error as string, "VALIDATION_ERROR");
-        data.slaHours = sla.value;
+        data.slaHours = daysToHours(sla.value);
       }
       if (input.description !== undefined) {
         data.description = normalizeDescription(input.description);

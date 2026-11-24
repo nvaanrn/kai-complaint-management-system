@@ -107,7 +107,7 @@ export interface ComplaintData {
   areaId?: string | null;          // FK ke OperationalArea (nullable di migration pertama)
   sourceId?: string | null;        // FK ke ComplaintSource (nullable di migration pertama)
   categoryId?: string;             // FK ke ComplaintCategoryMaster (non‑null setelah backfill)
-  slaHours?: number;               // Snapshot SLA jam kerja
+  slaHours?: number;               // Snapshot target SLA dalam jam (hari kerja x 24)
   slaStartAt?: Date | string;      // Saat SLA mulai dihitung
   slaDeadlineInitial?: Date | string; // Deadline awal (calendar)
   slaDeadline?: Date | string;     // Deadline efektif (setelah extend)

@@ -1,18 +1,24 @@
+import { addWorkingDays } from "@/lib/workingTime";
+
 /**
- * Helper to compute SLA snapshot fields for complaints (Stage 2).
- * In Stage 2 we only store a simple calendar‑hour SLA.
+ * Menghitung snapshot SLA keluhan saat dicatat.
  *
- * Returns an object containing:
- *  - slaHours: number (fixed to 24 for now)
- *  - slaStartAt: Date – the moment the complaint is recorded.
- *  - slaDeadlineInitial: Date – start + slaHours (calendar hours).
- *  - slaDeadline: Date – identical to slaDeadlineInitial for Stage 2.
+ * SLA dihitung dalam HARI KERJA (satu hari = 24 jam, Sabtu/Minggu/hari libur tidak dihitung).
+ * Kolom slaHours menyimpan target dalam jam, yaitu hari x 24 (24 = 1 hari kerja, 48 = 2 hari kerja).
+ *
+ * Mengembalikan:
+ *  - slaHours: target SLA (jam, kelipatan 24) pada saat keluhan dicatat
+ *  - slaStartAt: awal hitungan (saat keluhan dicatat)
+ *  - slaDeadlineInitial: tenggat awal, tidak berubah selama keluhan ada
+ *  - slaDeadline: tenggat efektif (berubah jika kategori diganti atau Verifikator memberi tambahan waktu)
+ *
+ * holidays: daftar kunci tanggal libur "YYYY-MM-DD" (WIB).
  */
-export function computeSlaSnapshot(start: Date, slaHours: number = 24) {
+export function computeSlaSnapshot(start: Date, slaHours: number = 24, holidays?: readonly string[]) {
+  const slaDays = Math.max(1, Math.ceil(slaHours / 24));
   const slaStartAt = new Date(start);
-  const ms = slaHours * 60 * 60 * 1000;
-  const slaDeadlineInitial = new Date(slaStartAt.getTime() + ms);
-  const slaDeadline = new Date(slaDeadlineInitial); // No business‑hour adjustment yet.
+  const slaDeadlineInitial = addWorkingDays(slaStartAt, slaDays, holidays);
+  const slaDeadline = new Date(slaDeadlineInitial);
   return {
     slaHours,
     slaStartAt,
