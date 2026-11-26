@@ -24,6 +24,7 @@ import { Permissions } from "@/lib/permissions";
 import { validateStateTransition } from "@/lib/state-machine";
 import { computeSlaSnapshot } from "@/lib/slaSnapshot";
 import { loadHolidayKeys } from "@/lib/holidayLookup";
+import { validateExtraWorkingDays, computeExtensionDeadline } from "@/lib/slaExtension";
 import { findMasterByName, findCategoryForNewComplaint } from "@/lib/masterLookup";
 import { legacyCategoryFromName } from "@/lib/masterDataRules";
 import { DOCUMENT_HEADER } from "@/config/documentTemplate";
@@ -539,6 +540,7 @@ export async function verifyComplaint(
   data: {
     result: VerificationResult;
     feedback?: string;
+    extraWorkingDays?: number;
   }
 ): Promise<ActionResponse> {
   const user = await getCurrentUser();
@@ -559,6 +561,16 @@ export async function verifyComplaint(
   const validation = validateVerificationInput(data);
   if (!validation.isValid) {
     return { success: false, error: validation.firstError, code: "VALIDATION_ERROR" };
+  }
+
+  // Penolakan wajib menyertakan tambahan waktu perbaikan (hari kerja)
+  let extraDays = 0;
+  if (data.result === VerificationResult.REJECTED) {
+    const extension = validateExtraWorkingDays(data.extraWorkingDays);
+    if (!extension.valid) {
+      return { success: false, error: extension.error, code: "VALIDATION_ERROR" };
+    }
+    extraDays = extension.value;
   }
 
   try {
@@ -602,16 +614,34 @@ export async function verifyComplaint(
         ? complaint.submissionCount
         : 1;
 
-      await tx.verification.create({
+      const verifiedAt = new Date();
+      const verification = await tx.verification.create({
         data: {
           complaintId,
           verifierId: user.id,
           result: data.result,
           feedback: data.feedback?.trim() || null,
           cycle: currentCycle,
-          verifiedAt: new Date(),
+          verifiedAt,
         },
       });
+
+      // Penolakan: SLA berhenti, tenggat efektif baru = saat penolakan + tambahan hari kerja.
+      // Tenggat awal (slaDeadlineInitial) tidak diubah agar riwayat audit tetap utuh.
+      let newDeadline: Date | null = null;
+      if (!isApproved) {
+        const holidayKeys = await loadHolidayKeys(tx);
+        newDeadline = computeExtensionDeadline(verifiedAt, extraDays, holidayKeys);
+        await tx.slaExtension.create({
+          data: {
+            complaintId,
+            verificationId: verification.id,
+            extraWorkingDays: extraDays,
+            rejectedAt: verifiedAt,
+            newDeadline,
+          },
+        });
+      }
 
       // 3. Tentukan status tujuan dan mutasi keluhan
       let newStatus: ComplaintStatus;
@@ -631,6 +661,7 @@ export async function verifyComplaint(
         data: {
           status: newStatus,
           completedAt,
+          ...(newDeadline ? { slaDeadline: newDeadline } : {}),
           // picId TIDAK diubah, tetap mengacu ke PIC sebelumnya
         },
       });
@@ -648,6 +679,9 @@ export async function verifyComplaint(
             feedback: data.feedback?.trim(),
             cycle: currentCycle,
             newStatus,
+            ...(newDeadline
+              ? { extraWorkingDays: extraDays, newSlaDeadline: newDeadline.toISOString() }
+              : {}),
           },
         },
       });

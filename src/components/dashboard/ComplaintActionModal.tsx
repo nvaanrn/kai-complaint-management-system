@@ -29,7 +29,7 @@ interface ComplaintActionModalProps {
     },
     submitForVerification: boolean
   ) => Promise<void>;
-  onVerify: (result: VerificationResult, feedback: string) => Promise<void>;
+  onVerify: (result: VerificationResult, feedback: string, extraWorkingDays?: number) => Promise<void>;
   isAssignedToCurrentUser: (item: ComplaintData) => boolean;
   isLoading: boolean;
 }
@@ -95,6 +95,7 @@ export default function ComplaintActionModal({
   // State: Verifier Fields
   const [verificationFeedback, setVerificationFeedback] = useState("");
   const [verificationError, setVerificationError] = useState("");
+  const [extraDays, setExtraDays] = useState("1");
 
   // Handle Image Upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -192,6 +193,16 @@ export default function ComplaintActionModal({
   const handleVerifyDecision = async (result: VerificationResult) => {
     if (result === VerificationResult.REJECTED && !verificationFeedback.trim()) {
       setVerificationError("Alasan / catatan revisi wajib diisi jika menolak hasil penanganan.");
+      return;
+    }
+    if (result === VerificationResult.REJECTED) {
+      const days = Number(extraDays);
+      if (!Number.isInteger(days) || days < 1 || days > 30) {
+        setVerificationError("Tambahan waktu perbaikan wajib diisi (1 sampai 30 hari kerja) saat menolak.");
+        return;
+      }
+      setVerificationError("");
+      await onVerify(result, verificationFeedback.trim(), days);
       return;
     }
     setVerificationError("");
@@ -767,6 +778,28 @@ export default function ComplaintActionModal({
                   }}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 text-slate-900"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Tambahan Waktu Perbaikan (hari kerja) <span className="text-rose-500 font-bold">* (Wajib jika menolak)</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  step={1}
+                  value={extraDays}
+                  onChange={(e) => {
+                    setExtraDays(e.target.value);
+                    if (verificationError) setVerificationError("");
+                  }}
+                  className="w-32 px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 text-slate-900"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Waktu SLA berhenti saat ditolak. Tenggat baru dihitung dari saat penolakan ditambah hari kerja ini
+                  (Sabtu, Minggu, dan hari libur tidak dihitung).
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-1">

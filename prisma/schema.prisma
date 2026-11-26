@@ -150,7 +150,7 @@ model Complaint {
   operationalArea   OperationalArea?        @relation("ComplaintOperationalArea", fields: [areaId], references: [id], map: "fk_complaint_operational_area")
   complaintSource   ComplaintSource?        @relation("ComplaintSource", fields: [sourceId], references: [id])
   complaintCategory ComplaintCategoryMaster @relation("ComplaintCategoryMaster", fields: [categoryId], references: [id])
-  SlaExtension      SlaExtension?
+  slaExtensions     SlaExtension[]
   ComplaintAuditLog ComplaintAuditLog[]
 
   @@index([status])
@@ -301,14 +301,16 @@ model ComplaintCategoryMaster {
 // -------------------------------------------------------------
 model SlaExtension {
   id                String       @id @default(uuid())
-  complaintId       String       @unique // satu ekstensi per keluhan
+  complaintId       String // satu keluhan bisa punya banyak perpanjangan (setiap penolakan Verifikator)
   complaint         Complaint    @relation(fields: [complaintId], references: [id], onDelete: Cascade)
   verificationId    String       @unique
   verification      Verification @relation(fields: [verificationId], references: [id])
-  extraWorkingHours Int
+  extraWorkingDays  Int // tambahan waktu perbaikan dalam HARI kerja
   rejectedAt        DateTime
   newDeadline       DateTime
   createdAt         DateTime     @default(now())
+
+  @@index([complaintId])
 }
 
 // -------------------------------------------------------------

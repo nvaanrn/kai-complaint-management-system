@@ -260,13 +260,14 @@ export default function DashboardClient({
   };
 
   // 4. Verify Complaint (Verifier)
-  const handleVerify = async (result: VerificationResult, feedback: string) => {
+  const handleVerify = async (result: VerificationResult, feedback: string, extraWorkingDays?: number) => {
     if (!selectedComplaint) return;
     try {
       setActionLoading(true);
       const res = await verifyComplaint(selectedComplaint.id, {
         result,
         feedback,
+        extraWorkingDays,
       });
 
       if (!res.success) {
@@ -274,10 +275,19 @@ export default function DashboardClient({
         return;
       }
 
+      const newDeadlineText = res.data?.slaDeadline
+        ? new Date(res.data.slaDeadline).toLocaleString("id-ID", {
+            timeZone: "Asia/Jakarta",
+            dateStyle: "full",
+            timeStyle: "short",
+          })
+        : null;
       const msg =
         result === VerificationResult.APPROVED
           ? "Keluhan telah disetujui & berstatus Terverifikasi!"
-          : "Keluhan ditolak dan dikembalikan ke PIC untuk perbaikan.";
+          : `Keluhan ditolak dan dikembalikan ke PIC untuk perbaikan.${
+              newDeadlineText ? ` Tenggat baru: ${newDeadlineText} WIB.` : ""
+            }`;
       showToast(msg);
       setSelectedComplaint(null);
       startTransition(() => {

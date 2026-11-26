@@ -27,6 +27,7 @@ export interface PicExecutionInput {
 export interface VerificationInput {
   result?: string | null;
   feedback?: string | null;
+  extraWorkingDays?: number | null; // wajib saat menolak; diperiksa di verifyComplaint
 }
 
 export interface ReopenRequestInput {
